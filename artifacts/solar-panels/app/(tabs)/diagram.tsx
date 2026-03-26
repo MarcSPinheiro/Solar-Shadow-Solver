@@ -56,7 +56,7 @@ function ShadowDiagram() {
 
   return (
     <View style={styles.diagramBox}>
-      <Text style={styles.diagramTitle}>Secção Lateral — Sombreamento</Text>
+      <Text style={styles.diagramTitle}>Secção Lateral — 21 de Dezembro, Meio-dia Solar</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <Svg width={viewW} height={viewH}>
           {/* Chão */}
@@ -275,12 +275,13 @@ function AngleInfo() {
       </View>
 
       <View style={styles.formulaBox}>
-        <Text style={styles.formulaTitle}>Fórmula Aplicada</Text>
+        <Text style={styles.formulaTitle}>Fórmula Aplicada — 21 de Dezembro (pior caso)</Text>
         <Text style={styles.formulaText}>d = h·cos(β) + [h·sin(β)/tan(α) − h·cos(β)]</Text>
         <Text style={styles.formulaText2}>d = h·sin(β) / tan(α)</Text>
         <Text style={styles.formulaDesc}>
           d = distância início→início{"\n"}
-          h = altura do painel · β = inclinação · α = altitude solar mínima (solstício de inverno)
+          h = altura do painel · β = inclinação{"\n"}
+          α = altitude solar a 21 dez., meio-dia (sol mais baixo do ano, δ = −23,45°)
         </Text>
       </View>
     </View>
@@ -304,7 +305,7 @@ export default function DiagramScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.screenTitle}>Diagrama de Sombreamento</Text>
-        <Text style={styles.screenSubtitle}>Vista lateral com cotas — início ao início</Text>
+        <Text style={styles.screenSubtitle}>21 de Dezembro · Vista lateral com cotas — início ao início</Text>
 
         {results ? (
           <>

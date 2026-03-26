@@ -136,6 +136,14 @@ export default function CalculatorScreen() {
           </View>
         </View>
 
+        {/* Reference date note */}
+        <View style={styles.referenceDateBox}>
+          <MaterialCommunityIcons name="calendar-today" size={15} color={Colors.light.warning} />
+          <Text style={styles.referenceDateText}>
+            Referência: <Text style={styles.referenceDateHighlight}>21 de Dezembro</Text> — solstício de inverno (sol mais baixo do ano, δ = −23,45°)
+          </Text>
+        </View>
+
         {/* Calculate Button */}
         <TouchableOpacity
           style={styles.calculateButton}
@@ -175,7 +183,7 @@ export default function CalculatorScreen() {
                 label="Sombra Projectada"
                 value={results.shadowLength.toFixed(2)}
                 unit="m"
-                description="solstício de inverno"
+                description="21 dez. (pior caso)"
               />
             </View>
 
@@ -184,7 +192,7 @@ export default function CalculatorScreen() {
                 label="Altitude Solar"
                 value={results.altitudeAngle.toFixed(1)}
                 unit="°"
-                description="pior caso (inverno)"
+                description="21 dez., meio-dia solar"
               />
               <View style={{ width: 10 }} />
               <ResultCard
@@ -219,7 +227,7 @@ export default function CalculatorScreen() {
             <View style={styles.noteBox}>
               <Ionicons name="information-circle" size={16} color={Colors.light.accent} />
               <Text style={styles.noteText}>
-                Cálculo baseado no pior caso: solstício de inverno ao meio-dia solar. A distância início→início inclui a projeção horizontal do painel ({results.panelProjectedDepth.toFixed(2)} m) mais o espaço livre ({results.gap.toFixed(2)} m).
+                Calculado para <Text style={{ fontFamily: "Inter_600SemiBold", color: Colors.light.accent }}>21 de Dezembro</Text> ao meio-dia solar — o dia em que o sol está mais baixo (α = {results.altitudeAngle.toFixed(1)}°, δ = −23,45°). Garante ausência de sombra durante todo o ano.
               </Text>
             </View>
           </View>
@@ -419,5 +427,27 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     color: Colors.light.textSecondary,
     lineHeight: 18,
+  },
+  referenceDateBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "rgba(245, 166, 35, 0.10)",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(245, 166, 35, 0.25)",
+    padding: 12,
+    marginBottom: 14,
+  },
+  referenceDateText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: Colors.light.textSecondary,
+    lineHeight: 18,
+  },
+  referenceDateHighlight: {
+    fontFamily: "Inter_700Bold",
+    color: Colors.light.warning,
   },
 });

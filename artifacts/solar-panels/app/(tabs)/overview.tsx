@@ -228,7 +228,9 @@ function SummaryTable() {
       ))}
       <View style={styles.noteBox}>
         <Text style={styles.noteText}>
-          * Potência estimada com painéis de 400W. A distância início→início inclui a projeção horizontal do painel ({results.panelProjectedDepth.toFixed(2)} m) e o espaço livre ({results.gap.toFixed(2)} m).
+          * Potência estimada com painéis de 400W. Distâncias calculadas para{" "}
+          <Text style={{ fontFamily: "Inter_700Bold", color: Colors.light.warning }}>21 de Dezembro</Text>
+          {" "}(sol mais baixo do ano, δ = −23,45°). A distância início→início = proj. horizontal ({results.panelProjectedDepth.toFixed(2)} m) + espaço livre ({results.gap.toFixed(2)} m).
         </Text>
       </View>
     </View>
