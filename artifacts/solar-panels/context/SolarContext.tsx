@@ -62,15 +62,19 @@ function computeSolar(params: SolarParams): SolarResults {
   const panelProjectedDepth = h * Math.cos(toRad(beta));
   const panelProjectedHeight = h * Math.sin(toRad(beta));
 
-  // Comprimento da sombra projectada no chão (desde a base do painel)
-  const shadowLength = panelProjectedHeight / Math.tan(altRad);
+  // Distância horizontal desde o topo projetado do painel até à ponta da sombra no chão.
+  // A sombra do topo do painel cai a: panelProjectedDepth + shadowFromTop desde a base.
+  // gap = espaço livre entre o fim do painel 1 e o início do painel 2 = shadowFromTop
+  const shadowFromTop = panelProjectedHeight / Math.tan(altRad);
 
-  // Espaço livre entre fileiras (gap) = sombra total - projeção horizontal do painel
-  const rawGap = shadowLength - panelProjectedDepth;
-  const gap = Math.max(rawGap, 0.2);
+  // Comprimento total da sombra desde a BASE do painel 1 até à ponta da sombra
+  const shadowLength = panelProjectedDepth + shadowFromTop;
 
-  // Distância início ao início do painel seguinte
-  const rowSpacing = panelProjectedDepth + gap;
+  // Espaço livre entre fileiras = shadowFromTop (distância do fim do painel à ponta da sombra)
+  const gap = shadowFromTop;
+
+  // Distância início ao início do painel seguinte = base do painel 1 até base do painel 2
+  const rowSpacing = panelProjectedDepth + gap; // = panelProjectedDepth + shadowFromTop = shadowLength
 
   // Dimensões totais do array
   const totalWidth = cols * w + (cols - 1) * 0.05;

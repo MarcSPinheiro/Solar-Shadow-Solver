@@ -140,7 +140,8 @@ export default function CalculatorScreen() {
         <View style={styles.referenceDateBox}>
           <MaterialCommunityIcons name="calendar-today" size={15} color={Colors.light.warning} />
           <Text style={styles.referenceDateText}>
-            Referência: <Text style={styles.referenceDateHighlight}>21 de Dezembro</Text> — solstício de inverno (sol mais baixo do ano, δ = −23,45°)
+            Referência: <Text style={styles.referenceDateHighlight}>21 de Dezembro</Text> — solstício de inverno (sol mais baixo, δ = −23,45°){"\n"}
+            <Text style={{ fontFamily: "Inter_600SemiBold", color: Colors.light.textSecondary }}>d = h·cos(β) + h·sin(β)/tan(α)</Text>
           </Text>
         </View>
 
@@ -227,7 +228,7 @@ export default function CalculatorScreen() {
             <View style={styles.noteBox}>
               <Ionicons name="information-circle" size={16} color={Colors.light.accent} />
               <Text style={styles.noteText}>
-                Calculado para <Text style={{ fontFamily: "Inter_600SemiBold", color: Colors.light.accent }}>21 de Dezembro</Text> ao meio-dia solar — o dia em que o sol está mais baixo (α = {results.altitudeAngle.toFixed(1)}°, δ = −23,45°). Garante ausência de sombra durante todo o ano.
+                Fórmula: <Text style={{ fontFamily: "Inter_600SemiBold", color: Colors.light.accent }}>d = h·cos(β) + h·sin(β)/tan(α)</Text>{"\n"}Calculado para <Text style={{ fontFamily: "Inter_600SemiBold", color: Colors.light.accent }}>21 de Dezembro</Text> ao meio-dia solar (α = {results.altitudeAngle.toFixed(1)}°, δ = −23,45°). Garante ausência de sombra durante todo o ano.
               </Text>
             </View>
           </View>

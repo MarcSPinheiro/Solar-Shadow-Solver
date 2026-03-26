@@ -276,12 +276,12 @@ function AngleInfo() {
 
       <View style={styles.formulaBox}>
         <Text style={styles.formulaTitle}>Fórmula Aplicada — 21 de Dezembro (pior caso)</Text>
-        <Text style={styles.formulaText}>d = h·cos(β) + [h·sin(β)/tan(α) − h·cos(β)]</Text>
-        <Text style={styles.formulaText2}>d = h·sin(β) / tan(α)</Text>
+        <Text style={styles.formulaText2}>d = h·cos(β) + h·sin(β) / tan(α)</Text>
         <Text style={styles.formulaDesc}>
-          d = distância início→início{"\n"}
-          h = altura do painel · β = inclinação{"\n"}
-          α = altitude solar a 21 dez., meio-dia (sol mais baixo do ano, δ = −23,45°)
+          d = distância início→início (base painel 1 → base painel 2){"\n"}
+          h·cos(β) = projeção horizontal do painel{"\n"}
+          h·sin(β)/tan(α) = extensão da sombra além do painel{"\n"}
+          α = altitude solar a 21 dez., meio-dia · δ = −23,45°
         </Text>
       </View>
     </View>
