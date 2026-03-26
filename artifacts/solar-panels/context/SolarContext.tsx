@@ -10,7 +10,8 @@ export interface SolarParams {
 }
 
 export interface SolarResults {
-  minDistance: number;
+  gap: number;           // espaço livre entre fileiras (fim do 1º ao início do 2º)
+  rowSpacing: number;    // distância início ao início (painel 1 ao painel 2)
   shadowLength: number;
   declinationAngle: number;
   altitudeAngle: number;
@@ -19,6 +20,7 @@ export interface SolarResults {
   panelHeight: number;
   panelWidth: number;
   panelAngle: number;
+  panelProjectedDepth: number; // projeção horizontal do painel
 }
 
 interface SolarContextType {
@@ -40,43 +42,52 @@ function computeSolar(params: SolarParams): SolarResults {
   const h = parseFloat(params.height) || 1.0;
   const w = parseFloat(params.width) || 1.0;
   const beta = parseFloat(params.angle) || 20;
-  const lat = parseFloat(params.latitude) || -20;
+  const lat = parseFloat(params.latitude) || 38.7;
   const rows = parseInt(params.rows) || 4;
   const cols = parseInt(params.cols) || 5;
 
   const toRad = (deg: number) => (deg * Math.PI) / 180;
   const toDeg = (rad: number) => (rad * 180) / Math.PI;
 
-  // Winter solstice declination (worst case, June 21 for southern hemisphere or Dec 21 for northern)
+  // Declinação solar no solstício de inverno (pior caso)
+  // Hemisfério norte (Portugal): 21 dezembro → δ = -23.45°
+  // Hemisfério sul: 21 junho → δ = +23.45°
   const dec = lat >= 0 ? -23.45 : 23.45;
 
-  // Solar altitude angle at solar noon (worst case - winter solstice)
-  const altRad = toRad(90 - Math.abs(lat) + dec);
-  const alt = toDeg(altRad);
+  // Ângulo de altitude solar ao meio-dia no solstício de inverno
+  const altDeg = 90 - Math.abs(lat) + dec;
+  const altRad = toRad(Math.max(altDeg, 1)); // evitar divisão por zero
 
-  // Height of the top of the inclined panel above ground
+  // Projeção horizontal e vertical do painel inclinado
+  const panelProjectedDepth = h * Math.cos(toRad(beta));
   const panelProjectedHeight = h * Math.sin(toRad(beta));
-  const panelProjectedHorizontal = h * Math.cos(toRad(beta));
 
-  // Shadow length cast by the top of the panel
-  const shadowLength = panelProjectedHeight / Math.tan(altRad > 0 ? altRad : toRad(1));
+  // Comprimento da sombra projectada no chão (desde a base do painel)
+  const shadowLength = panelProjectedHeight / Math.tan(altRad);
 
-  // Minimum distance between rows (from end of one panel to start of next)
-  const minDistance = shadowLength - panelProjectedHorizontal;
+  // Espaço livre entre fileiras (gap) = sombra total - projeção horizontal do painel
+  const rawGap = shadowLength - panelProjectedDepth;
+  const gap = Math.max(rawGap, 0.2);
 
-  const totalWidth = cols * w + (cols - 1) * 0.5;
-  const totalLength = rows * h * Math.cos(toRad(beta)) + (rows - 1) * Math.max(minDistance, 0.3);
+  // Distância início ao início do painel seguinte
+  const rowSpacing = panelProjectedDepth + gap;
+
+  // Dimensões totais do array
+  const totalWidth = cols * w + (cols - 1) * 0.05;
+  const totalLength = panelProjectedDepth + (rows - 1) * rowSpacing;
 
   return {
-    minDistance: Math.max(minDistance, 0.3),
+    gap,
+    rowSpacing,
     shadowLength,
     declinationAngle: dec,
-    altitudeAngle: alt,
+    altitudeAngle: altDeg,
     totalWidth,
     totalLength,
     panelHeight: h,
     panelWidth: w,
     panelAngle: beta,
+    panelProjectedDepth,
   };
 }
 
@@ -84,7 +95,7 @@ const defaultParams: SolarParams = {
   height: "1.65",
   width: "1.0",
   angle: "20",
-  latitude: "-22",
+  latitude: "38.7",
   rows: "4",
   cols: "5",
 };

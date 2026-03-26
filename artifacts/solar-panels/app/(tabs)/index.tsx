@@ -15,6 +15,7 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { InputField } from "@/components/InputField";
 import { ResultCard } from "@/components/ResultCard";
+import { LocationSearch } from "@/components/LocationSearch";
 import { useSolar, SolarParams } from "@/context/SolarContext";
 
 export default function CalculatorScreen() {
@@ -96,22 +97,15 @@ export default function CalculatorScreen() {
         </View>
 
         {/* Location */}
-        <View style={styles.section}>
+        <View style={[styles.section, { zIndex: 10 }]}>
           <View style={styles.sectionHeader}>
             <Ionicons name="location" size={16} color={Colors.light.accent} />
             <Text style={styles.sectionTitle}>Localização</Text>
           </View>
-          <InputField
-            label="Latitude"
-            unit="°"
-            hint="negativo = sul do equador"
-            value={localParams.latitude}
-            onChangeText={(v) => handleChange("latitude", v)}
-            placeholder="-22"
+          <LocationSearch
+            latitude={localParams.latitude}
+            onLatitudeChange={(lat) => handleChange("latitude", lat)}
           />
-          <Text style={styles.latitudeHint}>
-            Brasil: entre -5° (norte) e -34° (sul)
-          </Text>
         </View>
 
         {/* Array Configuration */}
@@ -157,36 +151,47 @@ export default function CalculatorScreen() {
           <View style={styles.resultsSection}>
             <Text style={styles.resultsSectionTitle}>Resultados</Text>
 
+            {/* Main result: row spacing start to start */}
+            <View style={styles.mainResultCard}>
+              <View style={styles.mainResultLeft}>
+                <Text style={styles.mainResultLabel}>Distância Início → Início</Text>
+                <Text style={styles.mainResultDesc}>entre fileiras consecutivas</Text>
+              </View>
+              <View style={styles.mainResultRight}>
+                <Text style={styles.mainResultValue}>{results.rowSpacing.toFixed(2)}</Text>
+                <Text style={styles.mainResultUnit}>m</Text>
+              </View>
+            </View>
+
             <View style={[styles.row, { marginBottom: 10 }]}>
               <ResultCard
-                label="Distância Mínima"
-                value={results.minDistance.toFixed(2)}
+                label="Espaço Livre"
+                value={results.gap.toFixed(2)}
                 unit="m"
-                highlight
-                description="entre fileiras"
+                description="folga entre fileiras"
               />
               <View style={{ width: 10 }} />
               <ResultCard
-                label="Comprimento Sombra"
+                label="Sombra Projectada"
                 value={results.shadowLength.toFixed(2)}
                 unit="m"
-                description="no solstício de inverno"
+                description="solstício de inverno"
               />
             </View>
 
             <View style={[styles.row, { marginBottom: 10 }]}>
               <ResultCard
-                label="Ângulo Solar"
+                label="Altitude Solar"
                 value={results.altitudeAngle.toFixed(1)}
                 unit="°"
-                description="altitude mínima"
+                description="pior caso (inverno)"
               />
               <View style={{ width: 10 }} />
               <ResultCard
-                label="Declinação"
-                value={results.declinationAngle.toFixed(1)}
-                unit="°"
-                description="solstício inverno"
+                label="Proj. Horizontal"
+                value={results.panelProjectedDepth.toFixed(2)}
+                unit="m"
+                description="profundidade do painel"
               />
             </View>
 
@@ -214,7 +219,7 @@ export default function CalculatorScreen() {
             <View style={styles.noteBox}>
               <Ionicons name="information-circle" size={16} color={Colors.light.accent} />
               <Text style={styles.noteText}>
-                Cálculo baseado no pior caso solar: solstício de inverno ao meio-dia solar, sem sombra entre fileiras.
+                Cálculo baseado no pior caso: solstício de inverno ao meio-dia solar. A distância início→início inclui a projeção horizontal do painel ({results.panelProjectedDepth.toFixed(2)} m) mais o espaço livre ({results.gap.toFixed(2)} m).
               </Text>
             </View>
           </View>
@@ -264,7 +269,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   section: {
-    marginBottom: 20,
+    marginBottom: 16,
     backgroundColor: Colors.light.card,
     borderRadius: 16,
     padding: 16,
@@ -294,14 +299,6 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
-  latitudeHint: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-    color: Colors.light.tabIconDefault,
-    marginTop: -4,
-    marginBottom: 4,
-    paddingHorizontal: 2,
-  },
   calculateButton: {
     backgroundColor: Colors.light.secondary,
     borderRadius: 14,
@@ -330,6 +327,49 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     color: Colors.light.text,
     marginBottom: 14,
+  },
+  mainResultCard: {
+    backgroundColor: Colors.light.secondary,
+    borderRadius: 16,
+    padding: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+    shadowColor: Colors.light.secondary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  mainResultLeft: {
+    flex: 1,
+  },
+  mainResultLabel: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: "#fff",
+    marginBottom: 3,
+  },
+  mainResultDesc: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: "rgba(255,255,255,0.65)",
+  },
+  mainResultRight: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 4,
+  },
+  mainResultValue: {
+    fontSize: 36,
+    fontFamily: "Inter_700Bold",
+    color: Colors.light.primary,
+  },
+  mainResultUnit: {
+    fontSize: 16,
+    fontFamily: "Inter_500Medium",
+    color: "rgba(255,255,255,0.7)",
   },
   totalArea: {
     backgroundColor: Colors.light.card,

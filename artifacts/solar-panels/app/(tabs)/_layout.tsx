@@ -20,7 +20,7 @@ function NativeTabLayout() {
         <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
         <Label>Diagrama</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="layout">
+      <NativeTabs.Trigger name="overview">
         <Icon sf={{ default: "square.grid.3x3", selected: "square.grid.3x3.fill" }} />
         <Label>Layout</Label>
       </NativeTabs.Trigger>
@@ -90,7 +90,7 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="layout"
+        name="overview"
         options={{
           title: "Layout",
           tabBarIcon: ({ color }) =>

@@ -22,150 +22,154 @@ function ArrayLayoutDiagram() {
 
   const rows = parseInt(params.rows) || 4;
   const cols = parseInt(params.cols) || 5;
-  const { panelHeight, panelWidth, panelAngle, minDistance } = results;
+  const { panelWidth, panelProjectedDepth, rowSpacing, gap } = results;
 
-  const anglRad = (panelAngle * Math.PI) / 180;
-  const panelProjectedDepth = panelHeight * Math.cos(anglRad);
-
-  // Scale to fit
-  const maxW = 310;
-  const totalW = cols * panelWidth + (cols - 1) * 0.3;
-  const totalD = rows * panelProjectedDepth + (rows - 1) * minDistance;
+  // Escala para caber no ecrã
+  const maxW = 300;
+  const totalW = cols * panelWidth + (cols - 1) * 0.05;
+  const totalD = (rows - 1) * rowSpacing + panelProjectedDepth;
   const scaleX = (maxW - 60) / totalW;
-  const scaleY = Math.min(scaleX, 220 / totalD);
+  const scaleY = Math.min(scaleX, 200 / totalD);
+
   const panelW = panelWidth * scaleX;
   const panelD = panelProjectedDepth * scaleY;
-  const gapX = 0.3 * scaleX;
-  const gapY = minDistance * scaleY;
-  const colGap = gapX;
-  const rowGap = gapY;
+  const colGap = 0.05 * scaleX;
+  const rowSpacingPx = rowSpacing * scaleY;
+  const gapPx = gap * scaleY;
 
   const offsetX = 50;
-  const offsetY = 20;
-  const totalSvgW = cols * panelW + (cols - 1) * colGap + offsetX + 10;
-  const totalSvgH = rows * panelD + (rows - 1) * rowGap + offsetY + 60;
+  const offsetY = 30;
+  const totalSvgW = cols * panelW + (cols - 1) * colGap + offsetX + 40;
+  const totalSvgH = (rows - 1) * rowSpacingPx + panelD + offsetY + 70;
 
   return (
     <View style={styles.diagramBox}>
-      <Text style={styles.diagramTitle}>Vista Superior - Layout do Array</Text>
+      <Text style={styles.diagramTitle}>Vista Superior — Array Completo</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <Svg width={Math.max(totalSvgW, 300)} height={totalSvgH + 10}>
-          {/* Draw panels */}
+          {/* Painéis */}
           {Array.from({ length: rows }).map((_, r) =>
             Array.from({ length: cols }).map((_, c) => {
               const x = offsetX + c * (panelW + colGap);
-              const y = offsetY + r * (panelD + rowGap);
-              const isLast = r === rows - 1;
-              const isFirst = r === 0;
+              const y = offsetY + r * rowSpacingPx;
               return (
                 <G key={`${r}-${c}`}>
-                  {/* Panel body */}
                   <Rect
                     x={x}
                     y={y}
                     width={panelW}
                     height={panelD}
                     fill={Colors.light.panel}
-                    opacity={0.85}
+                    opacity={0.88}
                     rx={2}
                   />
-                  {/* Cell lines on panel */}
-                  <Line x1={x + panelW / 3} y1={y} x2={x + panelW / 3} y2={y + panelD} stroke="#fff" strokeWidth={0.5} opacity={0.4} />
-                  <Line x1={x + (panelW * 2) / 3} y1={y} x2={x + (panelW * 2) / 3} y2={y + panelD} stroke="#fff" strokeWidth={0.5} opacity={0.4} />
-                  <Line x1={x} y1={y + panelD / 2} x2={x + panelW} y2={y + panelD / 2} stroke="#fff" strokeWidth={0.5} opacity={0.4} />
+                  {/* Linhas de células */}
+                  <Line x1={x + panelW / 3} y1={y} x2={x + panelW / 3} y2={y + panelD} stroke="#fff" strokeWidth={0.6} opacity={0.35} />
+                  <Line x1={x + (panelW * 2) / 3} y1={y} x2={x + (panelW * 2) / 3} y2={y + panelD} stroke="#fff" strokeWidth={0.6} opacity={0.35} />
+                  <Line x1={x} y1={y + panelD / 2} x2={x + panelW} y2={y + panelD / 2} stroke="#fff" strokeWidth={0.6} opacity={0.35} />
                 </G>
               );
             })
           )}
 
-          {/* Row gap dimension lines */}
+          {/* Cotas de distância início→início entre fileiras */}
           {Array.from({ length: rows - 1 }).map((_, r) => {
-            const y1 = offsetY + (r + 1) * panelD + r * rowGap;
-            const y2 = y1 + rowGap;
-            const xLine = offsetX + cols * panelW + (cols - 1) * colGap + 12;
+            const yTop = offsetY + r * rowSpacingPx;          // início do painel r
+            const yNext = offsetY + (r + 1) * rowSpacingPx;  // início do painel r+1
+            const yGapStart = yTop + panelD;                  // fim do painel r (início do espaço livre)
+            const xLine = offsetX + cols * panelW + (cols - 1) * colGap + 14;
+
             return (
-              <G key={`gap-${r}`}>
-                <Line x1={xLine} y1={y1} x2={xLine} y2={y2} stroke={Colors.light.success} strokeWidth={1.5} />
-                <Line x1={xLine - 4} y1={y1} x2={xLine + 4} y2={y1} stroke={Colors.light.success} strokeWidth={1.5} />
-                <Line x1={xLine - 4} y1={y2} x2={xLine + 4} y2={y2} stroke={Colors.light.success} strokeWidth={1.5} />
-                {rowGap > 12 ? (
+              <G key={`dim-${r}`}>
+                {/* Linha de cota início→início (verde) */}
+                <Line x1={xLine} y1={yTop} x2={xLine} y2={yNext} stroke={Colors.light.success} strokeWidth={1.5} />
+                <Line x1={xLine - 4} y1={yTop} x2={xLine + 4} y2={yTop} stroke={Colors.light.success} strokeWidth={1.5} />
+                <Line x1={xLine - 4} y1={yNext} x2={xLine + 4} y2={yNext} stroke={Colors.light.success} strokeWidth={1.5} />
+                {rowSpacingPx > 18 ? (
                   <SvgText
-                    x={xLine + 6}
-                    y={(y1 + y2) / 2 + 4}
+                    x={xLine + 7}
+                    y={(yTop + yNext) / 2 + 4}
                     fontSize="8"
                     fill={Colors.light.success}
                     fontWeight="700"
                   >
-                    {`${minDistance.toFixed(2)}m`}
+                    {`${rowSpacing.toFixed(2)}m`}
                   </SvgText>
+                ) : null}
+
+                {/* Espaço livre (vermelho) dentro do gap */}
+                {gapPx > 6 ? (
+                  <G>
+                    <Line
+                      x1={xLine - 10}
+                      y1={yGapStart}
+                      x2={xLine - 10}
+                      y2={yNext}
+                      stroke="#E53E3E"
+                      strokeWidth={1}
+                    />
+                    <Line x1={xLine - 13} y1={yGapStart} x2={xLine - 7} y2={yGapStart} stroke="#E53E3E" strokeWidth={1} />
+                    <Line x1={xLine - 13} y1={yNext} x2={xLine - 7} y2={yNext} stroke="#E53E3E" strokeWidth={1} />
+                    {gapPx > 14 ? (
+                      <SvgText
+                        x={xLine - 18}
+                        y={(yGapStart + yNext) / 2 + 3}
+                        fontSize="7"
+                        fill="#E53E3E"
+                        textAnchor="middle"
+                        transform={`rotate(-90, ${xLine - 18}, ${(yGapStart + yNext) / 2 + 3})`}
+                      >
+                        {`${gap.toFixed(2)}m`}
+                      </SvgText>
+                    ) : null}
+                  </G>
                 ) : null}
               </G>
             );
           })}
 
-          {/* Panel width dimension */}
-          <Line
-            x1={offsetX}
-            y1={offsetY - 10}
-            x2={offsetX + panelW}
-            y2={offsetY - 10}
-            stroke={Colors.light.accent}
-            strokeWidth={1.5}
-          />
-          <Line x1={offsetX} y1={offsetY - 14} x2={offsetX} y2={offsetY - 6} stroke={Colors.light.accent} strokeWidth={1.5} />
-          <Line x1={offsetX + panelW} y1={offsetY - 14} x2={offsetX + panelW} y2={offsetY - 6} stroke={Colors.light.accent} strokeWidth={1.5} />
-          <SvgText x={offsetX + panelW / 2} y={offsetY - 14} fontSize="9" fill={Colors.light.accent} textAnchor="middle" fontWeight="600">
-            {`${panelWidth.toFixed(2)}m`}
+          {/* Cota largura do painel */}
+          <Line x1={offsetX} y1={offsetY - 14} x2={offsetX + panelW} y2={offsetY - 14} stroke={Colors.light.accent} strokeWidth={1.5} />
+          <Line x1={offsetX} y1={offsetY - 18} x2={offsetX} y2={offsetY - 10} stroke={Colors.light.accent} strokeWidth={1.5} />
+          <Line x1={offsetX + panelW} y1={offsetY - 18} x2={offsetX + panelW} y2={offsetY - 10} stroke={Colors.light.accent} strokeWidth={1.5} />
+          <SvgText x={offsetX + panelW / 2} y={offsetY - 18} fontSize="9" fill={Colors.light.accent} textAnchor="middle" fontWeight="600">
+            {`L=${panelWidth.toFixed(2)}m`}
           </SvgText>
 
-          {/* Panel depth dimension */}
-          <Line
-            x1={offsetX - 14}
-            y1={offsetY}
-            x2={offsetX - 14}
-            y2={offsetY + panelD}
-            stroke={Colors.light.accent}
-            strokeWidth={1.5}
-          />
-          <Line x1={offsetX - 18} y1={offsetY} x2={offsetX - 10} y2={offsetY} stroke={Colors.light.accent} strokeWidth={1.5} />
-          <Line x1={offsetX - 18} y1={offsetY + panelD} x2={offsetX - 10} y2={offsetY + panelD} stroke={Colors.light.accent} strokeWidth={1.5} />
+          {/* Cota profundidade do painel */}
+          <Line x1={offsetX - 16} y1={offsetY} x2={offsetX - 16} y2={offsetY + panelD} stroke={Colors.light.accent} strokeWidth={1.5} />
+          <Line x1={offsetX - 20} y1={offsetY} x2={offsetX - 12} y2={offsetY} stroke={Colors.light.accent} strokeWidth={1.5} />
+          <Line x1={offsetX - 20} y1={offsetY + panelD} x2={offsetX - 12} y2={offsetY + panelD} stroke={Colors.light.accent} strokeWidth={1.5} />
           <SvgText
-            x={offsetX - 28}
+            x={offsetX - 30}
             y={offsetY + panelD / 2 + 4}
             fontSize="9"
             fill={Colors.light.accent}
             textAnchor="middle"
-            transform={`rotate(-90, ${offsetX - 28}, ${offsetY + panelD / 2 + 4})`}
             fontWeight="600"
+            transform={`rotate(-90, ${offsetX - 30}, ${offsetY + panelD / 2 + 4})`}
           >
             {`${panelProjectedDepth.toFixed(2)}m`}
           </SvgText>
 
-          {/* North arrow */}
-          <SvgText x={totalSvgW - 28} y={30} fontSize="10" fill={Colors.light.textSecondary} textAnchor="middle">N</SvgText>
-          <Line x1={totalSvgW - 28} y1={32} x2={totalSvgW - 28} y2={50} stroke={Colors.light.textSecondary} strokeWidth={1.5} />
-          <Rect
-            x={totalSvgW - 30}
-            y={26}
-            width={4}
-            height={6}
-            fill={Colors.light.textSecondary}
-          />
+          {/* Seta Norte */}
+          <SvgText x={totalSvgW - 20} y={28} fontSize="10" fill={Colors.light.textSecondary} textAnchor="middle" fontWeight="700">N</SvgText>
+          <Line x1={totalSvgW - 20} y1={30} x2={totalSvgW - 20} y2={46} stroke={Colors.light.textSecondary} strokeWidth={1.5} />
+          <Rect x={totalSvgW - 22} y={24} width={4} height={6} fill={Colors.light.textSecondary} />
 
-          {/* Labels at bottom */}
+          {/* Rodapé */}
           <SvgText
             x={offsetX + (cols * panelW + (cols - 1) * colGap) / 2}
-            y={totalSvgH - 4}
+            y={totalSvgH + 2}
             fontSize="9"
             fill={Colors.light.textSecondary}
             textAnchor="middle"
           >
-            {`${cols} colunas × ${rows} fileiras`}
+            {`${cols} col. × ${rows} fileiras · d=${rowSpacing.toFixed(2)}m início→início`}
           </SvgText>
         </Svg>
       </ScrollView>
 
-      {/* Legend */}
       <View style={styles.legend}>
         <View style={styles.legendItem}>
           <View style={[styles.legendColor, { backgroundColor: Colors.light.panel }]} />
@@ -173,11 +177,11 @@ function ArrayLayoutDiagram() {
         </View>
         <View style={styles.legendItem}>
           <View style={[styles.legendColor, { backgroundColor: Colors.light.success }]} />
-          <Text style={styles.legendText}>Distância entre fileiras</Text>
+          <Text style={styles.legendText}>Dist. início→início</Text>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.legendColor, { backgroundColor: Colors.light.accent }]} />
-          <Text style={styles.legendText}>Dimensões do painel</Text>
+          <View style={[styles.legendColor, { backgroundColor: "#E53E3E" }]} />
+          <Text style={styles.legendText}>Espaço livre</Text>
         </View>
       </View>
     </View>
@@ -198,12 +202,13 @@ function SummaryTable() {
   const data = [
     { label: "Painéis Totais", value: `${totalPanels} un` },
     { label: "Potência Estimada", value: `${totalPower.toFixed(1)} kWp` },
+    { label: "Dist. Início→Início", value: `${results.rowSpacing.toFixed(2)} m` },
+    { label: "Espaço Livre entre Fileiras", value: `${results.gap.toFixed(2)} m` },
     { label: "Área por Painel", value: `${areaPerPanel.toFixed(2)} m²` },
-    { label: "Área Útil Total", value: `${totalUsefulArea.toFixed(1)} m²` },
-    { label: "Área Ocupada Total", value: `${(results.totalWidth * results.totalLength).toFixed(1)} m²` },
-    { label: "Distância Min. Fileiras", value: `${results.minDistance.toFixed(2)} m` },
-    { label: "Largura Total Array", value: `${results.totalWidth.toFixed(2)} m` },
-    { label: "Comprimento Total Array", value: `${results.totalLength.toFixed(2)} m` },
+    { label: "Área Útil (painéis)", value: `${totalUsefulArea.toFixed(1)} m²` },
+    { label: "Largura Total do Array", value: `${results.totalWidth.toFixed(2)} m` },
+    { label: "Comprimento Total do Array", value: `${results.totalLength.toFixed(2)} m` },
+    { label: "Área Total Ocupada", value: `${(results.totalWidth * results.totalLength).toFixed(1)} m²` },
   ];
 
   return (
@@ -212,12 +217,18 @@ function SummaryTable() {
       {data.map((item, i) => (
         <View key={i} style={[styles.tableRow, i % 2 === 0 && styles.tableRowAlt]}>
           <Text style={styles.tableLabel}>{item.label}</Text>
-          <Text style={styles.tableValue}>{item.value}</Text>
+          <Text style={[
+            styles.tableValue,
+            item.label.includes("Início→Início") && { color: Colors.light.success },
+            item.label.includes("Espaço Livre") && { color: "#E53E3E" },
+          ]}>
+            {item.value}
+          </Text>
         </View>
       ))}
       <View style={styles.noteBox}>
         <Text style={styles.noteText}>
-          * Potência estimada com painéis de 400W (padrão residencial). Distância calculada para o solstício de inverno (pior caso anual).
+          * Potência estimada com painéis de 400W. A distância início→início inclui a projeção horizontal do painel ({results.panelProjectedDepth.toFixed(2)} m) e o espaço livre ({results.gap.toFixed(2)} m).
         </Text>
       </View>
     </View>
@@ -241,7 +252,7 @@ export default function LayoutScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.screenTitle}>Layout do Array</Text>
-        <Text style={styles.screenSubtitle}>Vista aérea com todas as fileiras</Text>
+        <Text style={styles.screenSubtitle}>Vista aérea com distâncias início→início</Text>
 
         {results ? (
           <>
@@ -262,16 +273,9 @@ export default function LayoutScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.light.background,
-  },
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 16,
-  },
+  container: { flex: 1, backgroundColor: Colors.light.background },
+  scroll: { flex: 1 },
+  content: { paddingHorizontal: 16 },
   screenTitle: {
     fontSize: 22,
     fontFamily: "Inter_700Bold",
@@ -307,20 +311,12 @@ const styles = StyleSheet.create({
   },
   legend: {
     flexDirection: "row",
-    gap: 12,
+    gap: 14,
     marginTop: 12,
     flexWrap: "wrap",
   },
-  legendItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  legendColor: {
-    width: 12,
-    height: 12,
-    borderRadius: 3,
-  },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+  legendColor: { width: 12, height: 12, borderRadius: 3 },
   legendText: {
     fontSize: 11,
     fontFamily: "Inter_400Regular",
