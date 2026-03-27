@@ -2,19 +2,39 @@ import React, { useRef, useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   Platform,
   TouchableOpacity,
-  ActivityIndicator,
+  ScrollView,
 } from "react-native";
 import WebMap, { WebMapRef } from "@/components/WebMap";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons, Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { useSolar } from "@/context/SolarContext";
 import { LogoMini } from "@/components/LogoMini";
 
-/* ─── HTML do mapa Leaflet ─────────────────────────────────────── */
+/* ─── Utilitários de orientação ────────────────────────────────── */
+function azLabel(az: number): string {
+  if (az >= 337.5 || az < 22.5) return "N";
+  if (az < 67.5) return "NE";
+  if (az < 112.5) return "E";
+  if (az < 157.5) return "SE";
+  if (az < 202.5) return "S";
+  if (az < 247.5) return "SO";
+  if (az < 292.5) return "O";
+  return "NO";
+}
+
+/** Fator de orientação baseado em dados PVGIS para Portugal (~39°N, inclinação ~35°).
+ *  Sul (180°) = 1.0 | Este/Oeste = ~0.84 | Norte = ~0.55  */
+function orientationFactor(az: number): number {
+  const dev = Math.min(Math.abs(az - 180), 360 - Math.abs(az - 180));
+  return Math.max(0.5, 1 - 0.0003 * dev - 0.0000125 * dev * dev);
+}
+
+/* ─── HTML do mapa Leaflet (com rotação de painéis) ────────────── */
 const MAP_HTML = `<!DOCTYPE html>
 <html>
 <head>
@@ -28,10 +48,10 @@ html, body { height: 100%; overflow: hidden; background: #0D2B45; }
 #map { width: 100%; height: 100%; }
 .info-bar {
   position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
-  background: rgba(13,43,69,0.88); color: #fff; padding: 6px 14px;
+  background: rgba(13,43,69,0.9); color: #fff; padding: 6px 14px;
   border-radius: 16px; font-family: -apple-system,sans-serif; font-size: 12px;
-  z-index: 1000; pointer-events: none; white-space: nowrap; max-width: 90%;
-  border: 1px solid rgba(245,166,35,0.4);
+  z-index: 1000; pointer-events: none; white-space: nowrap; max-width: 92%;
+  border: 1px solid rgba(245,166,35,0.5);
 }
 .leaflet-draw-toolbar a { background-color: #0D2B45 !important; }
 .leaflet-draw-toolbar a:hover { background-color: #1a3d5c !important; }
@@ -39,20 +59,18 @@ html, body { height: 100%; overflow: hidden; background: #0D2B45; }
 </head>
 <body>
 <div id="map"></div>
-<div id="info" class="info-bar">📐 Use a ferramenta para desenhar a área do telhado</div>
+<div id="info" class="info-bar">📐 Desenhe a área do telhado</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 <script>
 var map = L.map('map', { center: [39.6, -8.0], zoom: 7, zoomControl: true });
 
-// Esri Satellite (gratuito, sem API key)
 L.tileLayer(
   'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
   { attribution: '© Esri', maxZoom: 21, maxNativeZoom: 19 }
 ).addTo(map);
 
-// Labels layer
 L.tileLayer(
   'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
   { attribution: '', maxZoom: 21, maxNativeZoom: 19, opacity: 0.6 }
@@ -64,21 +82,15 @@ var panelLayer = new L.FeatureGroup().addTo(map);
 var drawControl = new L.Control.Draw({
   position: 'topright',
   draw: {
-    rectangle: {
-      shapeOptions: { color: '#F5A623', weight: 2, fillColor: '#F5A623', fillOpacity: 0.15 },
-    },
-    polygon: {
-      shapeOptions: { color: '#F5A623', weight: 2, fillColor: '#F5A623', fillOpacity: 0.15 },
-      allowIntersection: false,
-    },
+    rectangle: { shapeOptions: { color: '#F5A623', weight: 2, fillColor: '#F5A623', fillOpacity: 0.12 } },
+    polygon: { shapeOptions: { color: '#F5A623', weight: 2, fillColor: '#F5A623', fillOpacity: 0.12 }, allowIntersection: false },
     polyline: false, circle: false, circlemarker: false, marker: false,
   },
   edit: { featureGroup: drawnItems, remove: true },
 });
 map.addControl(drawControl);
 
-// Configuração dos painéis (actualizada por postMessage)
-var CFG = { panelW: 1.0, panelH: 2.0, rowSpacing: 0.5, colSpacing: 0.05 };
+var CFG = { panelW: 1.0, panelH: 2.0, rowSpacing: 0.5, colSpacing: 0.05, azimuth: 180 };
 
 function sendRN(obj) {
   var s = JSON.stringify(obj);
@@ -87,43 +99,61 @@ function sendRN(obj) {
   }
 }
 
-function latM(m) { return m / 110574; }
-function lngM(m, lat) { return m / (111320 * Math.cos(lat * Math.PI / 180)); }
-
-function getBoundsArea(bounds) {
-  var nw = bounds.getNorthWest(), ne = bounds.getNorthEast(), sw = bounds.getSouthWest();
-  return nw.distanceTo(ne) * nw.distanceTo(sw);
+/* ── Geometria ── */
+function rotXY(x, y, deg) {
+  var r = deg * Math.PI / 180;
+  return [ x * Math.cos(r) - y * Math.sin(r), x * Math.sin(r) + y * Math.cos(r) ];
+}
+function toLatlng(nx, ny, cLat, cLng) {
+  return [
+    cLat + ny / 110574,
+    cLng + nx / (111320 * Math.cos(cLat * Math.PI / 180))
+  ];
 }
 
+/* ── Desenha grelha de painéis rotacionada ── */
 function drawPanels(layer) {
   panelLayer.clearLayers();
   var bounds = layer.getBounds ? layer.getBounds() : null;
   if (!bounds) return 0;
 
-  var nw = bounds.getNorthWest(), se = bounds.getSouthEast();
-  var centerLat = (nw.lat + se.lat) / 2;
+  var center = bounds.getCenter();
+  var cLat = center.lat, cLng = center.lng;
+  var nw = bounds.getNorthWest();
+  var halfW = nw.distanceTo(bounds.getNorthEast()) / 2;
+  var halfH = nw.distanceTo(bounds.getSouthWest()) / 2;
+  var R = Math.sqrt(halfW * halfW + halfH * halfH) + Math.max(CFG.panelW, CFG.panelH);
 
-  var stepLat = latM(CFG.panelH + CFG.rowSpacing);
-  var stepLng = lngM(CFG.panelW + CFG.colSpacing, centerLat);
-  var pLat    = latM(CFG.panelH);
-  var pLng    = lngM(CFG.panelW, centerLat);
+  var rotDeg = CFG.azimuth - 180; // rotação da grelha relativamente ao sul
+  var stepX = CFG.panelW + CFG.colSpacing;
+  var stepY = CFG.panelH + CFG.rowSpacing;
 
   var count = 0, drawn = 0;
-  var lat = nw.lat;
-  while (lat - pLat >= se.lat - 0.000001) {
-    var lng = nw.lng;
-    while (lng + pLng <= se.lng + 0.000001) {
+  for (var y = -R; y < R; y += stepY) {
+    for (var x = -R; x < R; x += stepX) {
+      /* Centro do painel no referencial local (antes de rotar) */
+      var cx = x + CFG.panelW / 2;
+      var cy = y + CFG.panelH / 2;
+      /* Rodar o centro e verificar se está dentro dos bounds */
+      var rc = rotXY(cx, -cy, rotDeg);
+      var pLat = cLat + rc[1] / 110574;
+      var pLng = cLng + rc[0] / (111320 * Math.cos(cLat * Math.PI / 180));
+      if (!bounds.contains([pLat, pLng])) continue;
+
       count++;
-      if (drawn < 300) {
-        L.rectangle([[lat, lng],[lat - pLat, lng + pLng]], {
-          color: '#1E88E5', weight: 0.8,
-          fillColor: '#2B6CB0', fillOpacity: 0.75,
+      if (drawn < 500) {
+        /* 4 cantos do painel (referencial local) */
+        var corners = [[x, y],[x + CFG.panelW, y],[x + CFG.panelW, y + CFG.panelH],[x, y + CFG.panelH]];
+        var latlngs = corners.map(function(c) {
+          var r = rotXY(c[0], -c[1], rotDeg);
+          return toLatlng(r[0], r[1], cLat, cLng);
+        });
+        L.polygon(latlngs, {
+          color: '#1E88E5', weight: 0.8, fillColor: '#2B6CB0', fillOpacity: 0.78,
         }).addTo(panelLayer);
         drawn++;
       }
-      lng += stepLng;
     }
-    lat -= stepLat;
   }
   return count;
 }
@@ -131,35 +161,27 @@ function drawPanels(layer) {
 function onLayerChange(layer) {
   var bounds = layer.getBounds ? layer.getBounds() : null;
   if (!bounds) return;
-
   var latlngs = layer.getLatLngs ? layer.getLatLngs() : null;
-  var area;
+  var area = 0;
   if (latlngs) {
     var flat = Array.isArray(latlngs[0]) ? latlngs[0] : latlngs;
-    try { area = L.GeometryUtil.geodesicArea(flat); } catch(e) { area = 0; }
+    try { area = L.GeometryUtil.geodesicArea(flat); } catch(e) {}
   }
-  if (!area || area < 1) area = getBoundsArea(bounds);
-
+  if (!area || area < 1) {
+    var nw = bounds.getNorthWest();
+    area = nw.distanceTo(bounds.getNorthEast()) * nw.distanceTo(bounds.getSouthWest());
+  }
   var count = drawPanels(layer);
-  var kw = (count * 0.4).toFixed(1);
   document.getElementById('info').textContent =
-    'Área: ' + area.toFixed(0) + ' m\u00B2  |  Painéis: ' + count + '  |  ~' + kw + ' kWp';
-
-  sendRN({ type: 'roofMeasured', area: Math.round(area), panelCount: count,
-    lat: bounds.getCenter().lat, lng: bounds.getCenter().lng });
+    'Área: ' + area.toFixed(0) + ' m\u00B2  \u2502  Painéis: ' + count;
+  sendRN({ type: 'roofMeasured', area: Math.round(area), panelCount: count });
 }
 
-map.on('draw:created', function(e) {
-  drawnItems.clearLayers();
-  drawnItems.addLayer(e.layer);
-  onLayerChange(e.layer);
-});
-map.on('draw:edited', function(e) {
-  e.layers.eachLayer(function(l) { onLayerChange(l); });
-});
+map.on('draw:created', function(e) { drawnItems.clearLayers(); drawnItems.addLayer(e.layer); onLayerChange(e.layer); });
+map.on('draw:edited', function(e) { e.layers.eachLayer(function(l) { onLayerChange(l); }); });
 map.on('draw:deleted', function() {
   panelLayer.clearLayers();
-  document.getElementById('info').textContent = '📐 Use a ferramenta para desenhar a área do telhado';
+  document.getElementById('info').textContent = '📐 Desenhe a área do telhado';
   sendRN({ type: 'cleared' });
 });
 
@@ -168,103 +190,198 @@ function handleMsg(e) {
     var d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
     if (!d || !d.type) return;
     if (d.type === 'config') {
-      if (d.panelW) CFG.panelW = d.panelW;
-      if (d.panelH) CFG.panelH = d.panelH;
-      if (d.rowSpacing !== undefined) CFG.rowSpacing = d.rowSpacing;
+      if (d.panelW > 0) CFG.panelW = d.panelW;
+      if (d.panelH > 0) CFG.panelH = d.panelH;
+      if (d.rowSpacing >= 0) CFG.rowSpacing = d.rowSpacing;
+      if (d.colSpacing >= 0) CFG.colSpacing = d.colSpacing;
+      if (d.azimuth !== undefined) CFG.azimuth = d.azimuth;
       drawnItems.eachLayer(function(l) { onLayerChange(l); });
     }
-    if (d.type === 'flyTo') {
-      map.flyTo([d.lat, d.lng], d.zoom || 19, { duration: 1.5 });
-    }
+    if (d.type === 'flyTo') { map.flyTo([d.lat, d.lng], d.zoom || 19, { duration: 1.5 }); }
   } catch(err) {}
 }
 document.addEventListener('message', handleMsg);
 window.addEventListener('message', handleMsg);
-
-setTimeout(function() { sendRN({ type: 'ready' }); }, 800);
+setTimeout(function() { sendRN({ type: 'ready' }); }, 600);
 </script>
 </body>
 </html>`;
 
-/* ─── Componente React Native ──────────────────────────────────── */
+/* ─── Componente ───────────────────────────────────────────────── */
 export default function MapaScreen() {
   const insets = useSafeAreaInsets();
   const { params, results } = useSolar();
   const webRef = useRef<WebMapRef>(null);
-  const [ready, setReady] = useState(true);
+
+  /* Config dos painéis — pré-preenchida com valores do calculador */
+  const [panelW, setPanelW] = useState(
+    String(parseFloat(params.panelWidth) || 1.13)
+  );
+  const [panelH, setPanelH] = useState(
+    String(parseFloat(params.panelHeight) || 2.28)
+  );
+  const [panelPower, setPanelPower] = useState("400");
+  const [azimuth, setAzimuth] = useState(180);
+
+  /* Resultados da área desenhada */
   const [area, setArea] = useState<number | null>(null);
   const [panels, setPanels] = useState<number | null>(null);
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 84 : insets.bottom + 80;
 
-  /* Envia dimensões dos painéis para o WebView */
+  /* ── Derivados ── */
+  const factor = orientationFactor(azimuth);
+  const penaltyPct = Math.round((1 - factor) * 100);
+  const powerWp = parseFloat(panelPower) || 400;
+  const totalKwp = panels ? ((panels * powerWp) / 1000).toFixed(2) : null;
+  const adjKwp = panels ? ((panels * powerWp * factor) / 1000).toFixed(2) : null;
+
+  /* ── Envia config ao WebView ── */
   const pushConfig = useCallback(() => {
     if (!webRef.current) return;
-    const cfg = {
-      type: "config",
-      panelW: parseFloat(params.panelWidth) || 1.0,
-      panelH: parseFloat(params.panelHeight) || 2.0,
-      rowSpacing: results?.gap ?? 0.5,
-    };
-    webRef.current.postMessage(JSON.stringify(cfg));
-  }, [params.panelWidth, params.panelHeight, results?.gap]);
+    webRef.current.postMessage(
+      JSON.stringify({
+        type: "config",
+        panelW: parseFloat(panelW) || 1.13,
+        panelH: parseFloat(panelH) || 2.28,
+        rowSpacing: results?.gap ?? 0.5,
+        colSpacing: 0.02,
+        azimuth,
+      })
+    );
+  }, [panelW, panelH, azimuth, results?.gap]);
 
-  useEffect(() => {
-    if (ready) pushConfig();
-  }, [ready, pushConfig]);
+  useEffect(() => { pushConfig(); }, [pushConfig]);
 
-  /* Mensagens vindas do mapa */
+  /* ── Mensagens do mapa ── */
   const onMessage = (data: string) => {
     try {
       const d = JSON.parse(data);
-      if (d.type === "ready") { setReady(true); pushConfig(); }
+      if (d.type === "ready") { pushConfig(); }
       if (d.type === "roofMeasured") { setArea(d.area); setPanels(d.panelCount); }
       if (d.type === "cleared") { setArea(null); setPanels(null); }
     } catch (_) {}
   };
 
-  /* Centra o mapa na localidade calculada */
-  const flyToLocation = () => {
+  /* ── Voo para localidade do calculador ── */
+  const flyTo = () => {
     if (!webRef.current || !params.latitude) return;
     const lat = parseFloat(params.latitude);
-    if (isNaN(lat)) return;
-    webRef.current.postMessage(JSON.stringify({ type: "flyTo", lat, lng: -8.0, zoom: 18 }));
+    if (!isNaN(lat))
+      webRef.current.postMessage(JSON.stringify({ type: "flyTo", lat, lng: -8.0, zoom: 18 }));
   };
 
-  const powerKwp = panels ? (panels * 0.4).toFixed(1) : null;
-  const panelLabel = `${params.panelWidth || "1.0"} × ${params.panelHeight || "2.0"} m`;
+  /* ── Azimute ── */
+  const changeAz = (delta: number) =>
+    setAzimuth((prev) => (((prev + delta) % 360) + 360) % 360);
 
+  const dirLabel = azLabel(azimuth);
+  const isSouth = Math.abs(azimuth - 180) < 30;
+
+  /* ── Render ── */
   return (
     <View style={[styles.root, { paddingTop: topInset }]}>
 
       {/* ── Cabeçalho ─── */}
       <View style={styles.header}>
-        <LogoMini size={40} />
+        <LogoMini size={38} />
         <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>Mapa Satélite</Text>
-          <Text style={styles.headerSub}>Dimensione os painéis no telhado</Text>
+          <Text style={styles.headerSub}>Projeção de painéis no telhado</Text>
         </View>
         {params.latitude ? (
-          <TouchableOpacity style={styles.gpsBtn} onPress={flyToLocation}>
+          <TouchableOpacity style={styles.gpsBtn} onPress={flyTo}>
             <MaterialCommunityIcons name="crosshairs-gps" size={20} color={Colors.light.primary} />
           </TouchableOpacity>
         ) : null}
       </View>
 
+      {/* ── Painel de configuração ─── */}
+      <View style={styles.configBox}>
+        {/* Linha 1 — dimensões e potência */}
+        <View style={styles.configRow}>
+          <View style={styles.cfgGroup}>
+            <Text style={styles.cfgLbl}>Largura (m)</Text>
+            <TextInput
+              style={styles.cfgInput}
+              value={panelW}
+              onChangeText={setPanelW}
+              keyboardType="numeric"
+              placeholder="1.13"
+              placeholderTextColor={Colors.light.tabIconDefault}
+            />
+          </View>
+          <Text style={styles.cfgSep}>×</Text>
+          <View style={styles.cfgGroup}>
+            <Text style={styles.cfgLbl}>Altura (m)</Text>
+            <TextInput
+              style={styles.cfgInput}
+              value={panelH}
+              onChangeText={setPanelH}
+              keyboardType="numeric"
+              placeholder="2.28"
+              placeholderTextColor={Colors.light.tabIconDefault}
+            />
+          </View>
+          <View style={[styles.cfgGroup, { flex: 1.4 }]}>
+            <Text style={styles.cfgLbl}>Potência (Wp)</Text>
+            <TextInput
+              style={styles.cfgInput}
+              value={panelPower}
+              onChangeText={setPanelPower}
+              keyboardType="numeric"
+              placeholder="400"
+              placeholderTextColor={Colors.light.tabIconDefault}
+            />
+          </View>
+        </View>
+
+        {/* Linha 2 — azimute */}
+        <View style={styles.azRow}>
+          <MaterialCommunityIcons name="compass-rose" size={18} color={Colors.light.secondary} />
+          <Text style={styles.cfgLbl}>Orientação:</Text>
+
+          <TouchableOpacity style={styles.azBtn} onPress={() => changeAz(-5)}>
+            <Feather name="chevron-left" size={18} color={Colors.light.text} />
+          </TouchableOpacity>
+
+          <View style={styles.azDisplay}>
+            <Text style={styles.azDeg}>{azimuth}°</Text>
+            <Text style={[styles.azDir, { color: isSouth ? Colors.light.success : Colors.light.primary }]}>
+              {dirLabel}
+            </Text>
+          </View>
+
+          <TouchableOpacity style={styles.azBtn} onPress={() => changeAz(+5)}>
+            <Feather name="chevron-right" size={18} color={Colors.light.text} />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.azPreset} onPress={() => setAzimuth(180)}>
+            <Text style={styles.azPresetTxt}>S</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.azPreset} onPress={() => setAzimuth(135)}>
+            <Text style={styles.azPresetTxt}>SE</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.azPreset} onPress={() => setAzimuth(225)}>
+            <Text style={styles.azPresetTxt}>SO</Text>
+          </TouchableOpacity>
+
+          <View style={[styles.penBadge, penaltyPct > 10 ? styles.penBadgeWarn : styles.penBadgeOk]}>
+            <Text style={styles.penTxt}>
+              {penaltyPct === 0 ? "Ideal" : `-${penaltyPct}%`}
+            </Text>
+          </View>
+        </View>
+      </View>
+
       {/* ── Mapa ─── */}
       <View style={styles.mapWrap}>
-        {!ready && (
-          <View style={styles.loading}>
-            <ActivityIndicator color={Colors.light.primary} size="large" />
-            <Text style={styles.loadTxt}>A carregar mapa satélite…</Text>
-          </View>
-        )}
         <WebMap
           ref={webRef}
           html={MAP_HTML}
           onMessage={onMessage}
-          onLoadEnd={() => setReady(true)}
+          onLoadEnd={pushConfig}
           style={styles.webview}
         />
       </View>
@@ -278,25 +395,34 @@ export default function MapaScreen() {
                 <Text style={styles.cardVal}>{area} m²</Text>
                 <Text style={styles.cardLbl}>Área do telhado</Text>
               </View>
-              <View style={[styles.card, { borderColor: Colors.light.panel, borderWidth: 1.5 }]}>
+              <View style={[styles.card, styles.cardHighlight]}>
                 <Text style={[styles.cardVal, { color: Colors.light.panel }]}>{panels}</Text>
-                <Text style={styles.cardLbl}>Painéis ({panelLabel})</Text>
+                <Text style={styles.cardLbl}>
+                  Painéis{"\n"}
+                  {parseFloat(panelW).toFixed(2)}×{parseFloat(panelH).toFixed(2)} m
+                </Text>
               </View>
               <View style={styles.card}>
-                <Text style={[styles.cardVal, { color: Colors.light.success }]}>{powerKwp} kWp</Text>
-                <Text style={styles.cardLbl}>Potência estimada</Text>
+                <Text style={styles.cardVal}>{totalKwp} kWp</Text>
+                <Text style={styles.cardLbl}>Potência total</Text>
+              </View>
+              <View style={[styles.card, { backgroundColor: Colors.light.backgroundSecondary }]}>
+                <Text style={[styles.cardVal, { color: Colors.light.success }]}>{adjKwp} kWp</Text>
+                <Text style={styles.cardLbl}>
+                  Ajustada{"\n"}({dirLabel}, -{penaltyPct}%)
+                </Text>
               </View>
             </View>
             <Text style={styles.note}>
-              Clique na forma para editar · 🗑 para apagar · Painéis de 400W
+              ✏️ Clique na forma para editar · 🗑 para apagar · Orientação ideal: Sul (180°)
             </Text>
           </>
         ) : (
           <View style={styles.hint}>
             <MaterialCommunityIcons name="gesture-tap" size={22} color={Colors.light.tabIconDefault} />
             <Text style={styles.hintTxt}>
-              Use ◻ ou ⬡ na barra do mapa para desenhar a área do telhado.{"\n"}
-              Os painéis aparecem automaticamente.
+              Use ◻ ou ⬡ no mapa para desenhar a área do telhado.{"\n"}
+              A grelha de painéis e os cálculos aparecem automaticamente.
             </Text>
           </View>
         )}
@@ -308,46 +434,90 @@ export default function MapaScreen() {
 /* ─── Estilos ──────────────────────────────────────────────────── */
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.light.background },
+
   header: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    paddingHorizontal: 16, paddingVertical: 10,
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingHorizontal: 14, paddingVertical: 8,
     borderBottomWidth: 1, borderBottomColor: Colors.light.border,
     backgroundColor: Colors.light.card,
   },
-  headerTitle: { fontSize: 17, fontFamily: "Inter_700Bold", color: Colors.light.text },
-  headerSub: { fontSize: 11, fontFamily: "Inter_400Regular", color: Colors.light.textSecondary },
-  gpsBtn: {
-    padding: 8, borderRadius: 10,
-    backgroundColor: Colors.light.backgroundSecondary,
+  headerTitle: { fontSize: 16, fontFamily: "Inter_700Bold", color: Colors.light.text },
+  headerSub: { fontSize: 10, fontFamily: "Inter_400Regular", color: Colors.light.textSecondary },
+  gpsBtn: { padding: 7, borderRadius: 8, backgroundColor: Colors.light.backgroundSecondary },
+
+  configBox: {
+    backgroundColor: Colors.light.card,
+    borderBottomWidth: 1, borderBottomColor: Colors.light.border,
+    paddingHorizontal: 12, paddingVertical: 8, gap: 6,
   },
+  configRow: { flexDirection: "row", alignItems: "flex-end", gap: 6 },
+  cfgGroup: { flex: 1, gap: 2 },
+  cfgLbl: { fontSize: 9, fontFamily: "Inter_600SemiBold", color: Colors.light.textSecondary, textTransform: "uppercase" },
+  cfgInput: {
+    borderWidth: 1, borderColor: Colors.light.border, borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 5,
+    fontSize: 14, fontFamily: "Inter_600SemiBold", color: Colors.light.text,
+    backgroundColor: Colors.light.backgroundSecondary, textAlign: "center",
+  },
+  cfgSep: { fontSize: 16, color: Colors.light.textSecondary, paddingBottom: 6 },
+
+  azRow: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    flexWrap: "nowrap",
+  },
+  azBtn: {
+    padding: 5, borderRadius: 6,
+    backgroundColor: Colors.light.backgroundSecondary,
+    borderWidth: 1, borderColor: Colors.light.border,
+  },
+  azDisplay: {
+    flexDirection: "row", alignItems: "baseline", gap: 4,
+    backgroundColor: Colors.light.backgroundSecondary,
+    borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4,
+    borderWidth: 1, borderColor: Colors.light.border, minWidth: 72,
+    justifyContent: "center",
+  },
+  azDeg: { fontSize: 14, fontFamily: "Inter_700Bold", color: Colors.light.text },
+  azDir: { fontSize: 12, fontFamily: "Inter_700Bold" },
+  azPreset: {
+    paddingHorizontal: 7, paddingVertical: 4, borderRadius: 6,
+    backgroundColor: Colors.light.secondary + "18",
+    borderWidth: 1, borderColor: Colors.light.secondary + "40",
+  },
+  azPresetTxt: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: Colors.light.secondary },
+  penBadge: {
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12,
+    marginLeft: "auto" as any,
+  },
+  penBadgeOk: { backgroundColor: Colors.light.success + "22" },
+  penBadgeWarn: { backgroundColor: Colors.light.primary + "22" },
+  penTxt: { fontSize: 12, fontFamily: "Inter_700Bold", color: Colors.light.text },
+
   mapWrap: { flex: 1, position: "relative" },
   webview: { flex: 1, backgroundColor: Colors.light.secondary },
-  loading: {
-    ...StyleSheet.absoluteFillObject, backgroundColor: Colors.light.secondary,
-    justifyContent: "center", alignItems: "center", gap: 14, zIndex: 10,
-  },
-  loadTxt: { color: "#fff", fontFamily: "Inter_400Regular", fontSize: 14 },
+
   results: {
     backgroundColor: Colors.light.card,
     borderTopWidth: 1, borderTopColor: Colors.light.border,
-    padding: 14,
+    padding: 12,
   },
-  cards: { flexDirection: "row", gap: 10, marginBottom: 8 },
+  cards: { flexDirection: "row", gap: 7, marginBottom: 6 },
   card: {
     flex: 1, backgroundColor: Colors.light.backgroundSecondary,
-    borderRadius: 12, padding: 10, alignItems: "center", gap: 3,
+    borderRadius: 10, padding: 8, alignItems: "center", gap: 2,
     borderWidth: 1, borderColor: Colors.light.border,
   },
-  cardVal: { fontSize: 16, fontFamily: "Inter_700Bold", color: Colors.light.text },
+  cardHighlight: { borderColor: Colors.light.panel, borderWidth: 1.5 },
+  cardVal: { fontSize: 13, fontFamily: "Inter_700Bold", color: Colors.light.text },
   cardLbl: {
-    fontSize: 9, fontFamily: "Inter_400Regular",
-    color: Colors.light.textSecondary, textAlign: "center",
+    fontSize: 8, fontFamily: "Inter_400Regular",
+    color: Colors.light.textSecondary, textAlign: "center", lineHeight: 11,
   },
   note: {
-    fontSize: 10, fontFamily: "Inter_400Regular",
+    fontSize: 9, fontFamily: "Inter_400Regular",
     color: Colors.light.tabIconDefault, textAlign: "center",
   },
-  hint: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 4 },
+  hint: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 2 },
   hintTxt: {
     flex: 1, fontSize: 12, fontFamily: "Inter_400Regular",
     color: Colors.light.tabIconDefault, lineHeight: 18,
