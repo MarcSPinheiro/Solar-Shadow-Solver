@@ -118,14 +118,14 @@ export default function ReportScreen() {
           value={client.name}
           onChangeText={(v) => updateClient("name", v)}
           placeholder="Nome completo ou empresa"
-          icon="person-outline"
+          keyboardType="default"
         />
         <InputField
           label="Morada"
           value={client.address}
           onChangeText={(v) => updateClient("address", v)}
           placeholder="Rua, nº, código postal, localidade"
-          icon="location-outline"
+          keyboardType="default"
         />
         <InputField
           label="NIF"
@@ -133,7 +133,6 @@ export default function ReportScreen() {
           onChangeText={(v) => updateClient("nif", v)}
           placeholder="Ex: 123456789"
           keyboardType="numeric"
-          icon="card-outline"
         />
         <InputField
           label="Telefone"
@@ -141,7 +140,6 @@ export default function ReportScreen() {
           onChangeText={(v) => updateClient("phone", v)}
           placeholder="Ex: 912 345 678"
           keyboardType="phone-pad"
-          icon="call-outline"
         />
         <InputField
           label="E-mail"
@@ -149,14 +147,13 @@ export default function ReportScreen() {
           onChangeText={(v) => updateClient("email", v)}
           placeholder="cliente@email.com"
           keyboardType="email-address"
-          icon="mail-outline"
         />
         <InputField
           label="Notas / Observações"
           value={client.notes}
           onChangeText={(v) => updateClient("notes", v)}
           placeholder="Referências do projeto, condicionantes, etc."
-          icon="document-text-outline"
+          keyboardType="default"
         />
       </Section>
 
