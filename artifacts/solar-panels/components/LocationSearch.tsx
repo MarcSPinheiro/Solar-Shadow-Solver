@@ -47,13 +47,10 @@ export function LocationSearch({ latitude, onLatitudeChange }: LocationSearchPro
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&countrycodes=pt&format=json&limit=6&addressdetails=0`;
-        const res = await fetch(url, {
-          headers: {
-            "Accept-Language": "pt-PT,pt;q=0.9",
-            "User-Agent": "FotoCalc/1.0 (Pinheiro Instalações Eléctricas; pinheiro.iec@gmail.com)",
-          },
-        });
+        const domain = process.env.EXPO_PUBLIC_DOMAIN;
+        const url = `https://${domain}/api/geocode?q=${encodeURIComponent(text)}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data: NominatimResult[] = await res.json();
         setResults(data);
         setShowDropdown(data.length > 0);
