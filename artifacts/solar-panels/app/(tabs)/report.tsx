@@ -14,6 +14,7 @@ import { MaterialCommunityIcons, Feather, Ionicons } from "@expo/vector-icons";
 import { InputField } from "@/components/InputField";
 import Colors from "@/constants/colors";
 import { useClient } from "@/context/ClientContext";
+import { LogoMini } from "@/components/LogoMini";
 import { useRoi } from "@/context/RoiContext";
 import { useSolar } from "@/context/SolarContext";
 import { generateAndSharePdf } from "@/utils/pdfGenerator";
@@ -90,11 +91,11 @@ export default function ReportScreen() {
     >
       {/* Header */}
       <View style={styles.header}>
-        <MaterialCommunityIcons name="file-chart" size={32} color={Colors.light.primary} />
+        <LogoMini size={48} />
         <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>Relatório para Cliente</Text>
           <Text style={styles.headerSub}>
-            Gera um PDF profissional com o cabeçalho da empresa e todos os estudos realizados
+            PDF profissional com cabeçalho da empresa e todos os estudos realizados
           </Text>
         </View>
       </View>

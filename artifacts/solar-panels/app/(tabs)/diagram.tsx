@@ -7,6 +7,7 @@ import {
   Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LogoMini } from "@/components/LogoMini";
 import Svg, {
   Rect,
   Line,
@@ -304,8 +305,13 @@ export default function DiagramScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.screenTitle}>Diagrama de Sombreamento</Text>
-        <Text style={styles.screenSubtitle}>21 de Dezembro · Vista lateral com cotas — início ao início</Text>
+        <View style={styles.headerRow}>
+          <LogoMini size={44} />
+          <View style={styles.headerText}>
+            <Text style={styles.screenTitle}>Diagrama de Sombreamento</Text>
+            <Text style={styles.screenSubtitle}>21 de Dezembro · Vista lateral com cotas — início ao início</Text>
+          </View>
+        </View>
 
         {results ? (
           <>
@@ -329,17 +335,25 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.light.background },
   scroll: { flex: 1 },
   content: { paddingHorizontal: 16 },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 20,
+  },
+  headerText: {
+    flex: 1,
+  },
   screenTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontFamily: "Inter_700Bold",
     color: Colors.light.text,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   screenSubtitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: "Inter_400Regular",
     color: Colors.light.textSecondary,
-    marginBottom: 20,
   },
   diagramBox: {
     backgroundColor: Colors.light.card,

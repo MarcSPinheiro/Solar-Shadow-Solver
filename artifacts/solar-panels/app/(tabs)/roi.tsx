@@ -24,6 +24,7 @@ import { InputField } from "@/components/InputField";
 import Colors from "@/constants/colors";
 import * as Haptics from "expo-haptics";
 import { useRoi, ORIENTATIONS } from "@/context/RoiContext";
+import { LogoMini } from "@/components/LogoMini";
 
 // Local chart labels
 const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -288,9 +289,7 @@ export default function RoiScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerIcon}>
-            <MaterialCommunityIcons name="currency-eur" size={22} color={Colors.light.primary} />
-          </View>
+          <LogoMini size={44} />
           <View>
             <Text style={styles.title}>Retorno de Investimento</Text>
             <Text style={styles.subtitle}>Análise financeira do kit solar</Text>

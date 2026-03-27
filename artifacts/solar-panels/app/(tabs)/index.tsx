@@ -17,6 +17,7 @@ import { InputField } from "@/components/InputField";
 import { ResultCard } from "@/components/ResultCard";
 import { LocationSearch } from "@/components/LocationSearch";
 import { useSolar, SolarParams } from "@/context/SolarContext";
+import { LogoMini } from "@/components/LogoMini";
 
 export default function CalculatorScreen() {
   const insets = useSafeAreaInsets();
@@ -57,9 +58,7 @@ export default function CalculatorScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerIcon}>
-            <MaterialCommunityIcons name="solar-panel" size={22} color={Colors.light.primary} />
-          </View>
+          <LogoMini size={44} />
           <View style={styles.headerText}>
             <Text style={styles.title}>Painéis Fotovoltaicos</Text>
             <Text style={styles.subtitle}>Cálculo de distanciamento</Text>
