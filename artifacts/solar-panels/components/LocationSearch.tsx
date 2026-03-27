@@ -11,6 +11,39 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
+import Constants from "expo-constants";
+
+function buildGeocodeUrl(query: string): string {
+  const encoded = encodeURIComponent(query);
+
+  if (Platform.OS === "web") {
+    // No browser, o Nominatim bloqueia CORS da origem Replit.
+    // Usa o proxy no servidor — deriva o domínio retirando o prefixo "expo."
+    // ex: "abc.expo.riker.replit.dev" → "abc.riker.replit.dev"
+    const hostname =
+      typeof window !== "undefined"
+        ? window.location.hostname.replace(/^expo\./, "")
+        : process.env.EXPO_PUBLIC_DOMAIN || "";
+    if (hostname) {
+      return `https://${hostname}/api/geocode?q=${encoded}`;
+    }
+  } else {
+    // No nativo (Expo Go / APK), usa o servidor proxy — deriva o domínio
+    // a partir do manifest do Expo (debuggerHost = "dominio:porta").
+    const expoHostUri: string =
+      (Constants.expoGoConfig as any)?.debuggerHost ||
+      (Constants.manifest2 as any)?.extra?.expoGo?.debuggerHost ||
+      process.env.EXPO_PUBLIC_DOMAIN ||
+      "";
+    const host = expoHostUri.split(":")[0].replace(/^expo\./, "");
+    if (host) {
+      return `https://${host}/api/geocode?q=${encoded}`;
+    }
+  }
+
+  // Último recurso: Nominatim direto (pode falhar por CORS/User-Agent)
+  return `https://nominatim.openstreetmap.org/search?q=${encoded}&countrycodes=pt&format=json&limit=6&addressdetails=0`;
+}
 
 interface NominatimResult {
   place_id: number;
@@ -47,9 +80,10 @@ export function LocationSearch({ latitude, onLatitudeChange }: LocationSearchPro
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const domain = process.env.EXPO_PUBLIC_DOMAIN;
-        const url = `https://${domain}/api/geocode?q=${encodeURIComponent(text)}`;
-        const res = await fetch(url);
+        const url = buildGeocodeUrl(text);
+        const res = await fetch(url, {
+          headers: { "Accept-Language": "pt-PT,pt;q=0.9" },
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data: NominatimResult[] = await res.json();
         setResults(data);
