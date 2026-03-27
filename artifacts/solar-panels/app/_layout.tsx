@@ -15,6 +15,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SolarProvider } from "@/context/SolarContext";
+import { ClientProvider } from "@/context/ClientContext";
+import { RoiProvider } from "@/context/RoiContext";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -49,7 +51,11 @@ export default function RootLayout() {
           <GestureHandlerRootView>
             <KeyboardProvider>
               <SolarProvider>
-                <RootLayoutNav />
+                <RoiProvider>
+                  <ClientProvider>
+                    <RootLayoutNav />
+                  </ClientProvider>
+                </RoiProvider>
               </SolarProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>

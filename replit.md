@@ -1,3 +1,43 @@
+# FotoCalc — Solar Panel Calculator (Mobile App)
+
+## Project Goal
+Mobile Expo React Native app for Pinheiro Instalações Eléctricas e Canalizações Unipessoal Lda.
+Two main tools: (1) minimum panel spacing calculator (avoid shading), (2) ROI/investment return analysis.
+Generates a professional PDF report with company branding for client presentations.
+
+## Company (PDF Header)
+- **Name**: Pinheiro Instalações Eléctricas e Canalizações Unipessoal Lda
+- **Address**: Quinta do Chão Grande nº78 Massarocas, 3660-409 São Pedro do Sul
+- **NIF**: 506505170 | **Tel**: 964 119 508
+
+## App Tabs (5 tabs)
+1. **Calcular** (`index.tsx`) — Panel spacing input form
+2. **Diagrama** (`diagram.tsx`) — SVG cross-section diagram
+3. **Layout** (`overview.tsx`) — Top-down array layout diagram (1:1 scale, N/S labels)
+4. **Retorno** (`roi.tsx`) — ROI analysis with charts + 25-year projection
+5. **Relatório** (`report.tsx`) — Client data form + PDF generation
+
+## Key Files
+- `context/SolarContext.tsx` — Panel spacing state + calculation
+- `context/RoiContext.tsx` — ROI state (lifted from roi.tsx), provides `useRoi()`
+- `context/ClientContext.tsx` — Client name/address/NIF/phone/email
+- `utils/pdfGenerator.ts` — HTML template + PDF generation via expo-print/expo-sharing
+- `assets/logo.png` — Company logo (background removed)
+
+## Providers (app/_layout.tsx)
+`SolarProvider > RoiProvider > ClientProvider`
+
+## Key Packages
+`expo-print`, `expo-sharing`, `expo-file-system`, `expo-asset`, `react-native-svg`, `expo-haptics`
+
+## Spacing Formula
+`d = h·cos(β) + h·sin(β)/tan(α)` | α = 90° − |lat| + δ | δ = −23.45° (Dec 21 solstice)
+
+## Theme
+Navy #0D2B45 + Golden #F5A623 + Accent Blue #1E88E5
+
+---
+
 # Workspace
 
 ## Overview

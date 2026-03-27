@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React from "react";
 import {
   ScrollView,
   View,
@@ -23,175 +23,10 @@ import { MaterialCommunityIcons, Feather, Ionicons } from "@expo/vector-icons";
 import { InputField } from "@/components/InputField";
 import Colors from "@/constants/colors";
 import * as Haptics from "expo-haptics";
+import { useRoi, ORIENTATIONS } from "@/context/RoiContext";
 
-// ─── Portugal monthly irradiation weights (sum = 1.0) ───────────────────────
-const MONTHLY_FACTORS = [
-  0.050, 0.063, 0.087, 0.095, 0.109, 0.114,
-  0.119, 0.110, 0.091, 0.068, 0.050, 0.044,
-];
+// Local chart labels
 const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-
-// ─── Orientation ─────────────────────────────────────────────────────────────
-const ORIENTATIONS = [
-  { label: "S", full: "Sul", factor: 1.00 },
-  { label: "SW", full: "Sudoeste", factor: 0.95 },
-  { label: "SE", full: "Sudeste", factor: 0.95 },
-  { label: "W", full: "Oeste", factor: 0.82 },
-  { label: "E", full: "Este", factor: 0.82 },
-  { label: "NW", full: "Noroeste", factor: 0.68 },
-  { label: "NE", full: "Nordeste", factor: 0.68 },
-  { label: "N", full: "Norte", factor: 0.55 },
-];
-
-// ─── Inclination factor (interpolated lookup) ─────────────────────────────────
-function getInclinationFactor(deg: number): number {
-  const table: [number, number][] = [
-    [0, 0.78], [10, 0.88], [20, 0.95], [30, 0.99], [35, 1.00],
-    [40, 0.99], [45, 0.97], [60, 0.89], [75, 0.78], [90, 0.65],
-  ];
-  if (deg <= 0) return 0.78;
-  if (deg >= 90) return 0.65;
-  for (let i = 0; i < table.length - 1; i++) {
-    const [a, fa] = table[i];
-    const [b, fb] = table[i + 1];
-    if (deg >= a && deg <= b) {
-      return fa + (fb - fa) * (deg - a) / (b - a);
-    }
-  }
-  return 1.0;
-}
-
-// ─── Types ───────────────────────────────────────────────────────────────────
-interface RoiParams {
-  investmentCost: string;
-  panelPower: string;
-  numPanels: string;
-  inclination: string;
-  inverterPower: string;
-  annualConsumption: string;
-  batteryCapacity: string;
-  electricityPrice: string;
-  feedInTariff: string;
-}
-
-interface RoiResults {
-  totalPowerKwp: number;
-  annualProductionKwh: number;
-  monthlyKwh: number[];
-  annualSavingsEur: number;
-  selfKwh: number;
-  selfRate: number;
-  exportKwh: number;
-  consumptionCoveredPct: number | null;
-  paybackYears: number;
-  netAfter20: number;
-  netAfter25: number;
-  cumulativeNet: number[];
-}
-
-// ─── Self-consumption model ───────────────────────────────────────────────────
-// Direct self-consumption: fraction produced while load is simultaneously active.
-// For Portugal residential, ~42% of generation coincides with real-time consumption.
-// Battery stores excess solar and discharges to cover evening/night load.
-function calcSelfConsumption(
-  productionKwh: number,
-  consumptionKwh: number,
-  hasBattery: boolean,
-  batteryCapacityKwh: number
-): { selfKwh: number; selfRate: number } {
-  if (productionKwh <= 0) return { selfKwh: 0, selfRate: 0 };
-
-  // No consumption data → fall back to fixed industry estimates
-  if (consumptionKwh <= 0) {
-    const r = hasBattery
-      ? Math.min(0.85, 0.30 + (batteryCapacityKwh * 365 * 0.9) / Math.max(1, productionKwh))
-      : 0.30;
-    return { selfKwh: productionKwh * r, selfRate: r };
-  }
-
-  // Direct match (load vs generation simultaneity ~42% of generation window)
-  const directKwh = Math.min(productionKwh * 0.42, consumptionKwh);
-
-  if (!hasBattery || batteryCapacityKwh <= 0) {
-    return { selfKwh: directKwh, selfRate: directKwh / productionKwh };
-  }
-
-  // Battery: 1 cycle/day, 90% round-trip efficiency
-  const batteryThroughputYear = batteryCapacityKwh * 365 * 0.90;
-  const excessAfterDirect = Math.max(0, productionKwh - directKwh);
-  const unmetLoad = Math.max(0, consumptionKwh - directKwh);
-  const batteryKwh = Math.min(batteryThroughputYear, excessAfterDirect, unmetLoad);
-
-  const selfKwh = directKwh + batteryKwh;
-  return { selfKwh, selfRate: Math.min(1, selfKwh / productionKwh) };
-}
-
-// ─── Core computation ─────────────────────────────────────────────────────────
-function computeRoi(
-  params: RoiParams,
-  orientation: string,
-  hasBattery: boolean
-): RoiResults | null {
-  const cost = parseFloat(params.investmentCost);
-  const panelW = parseFloat(params.panelPower);
-  const n = parseFloat(params.numPanels);
-  const inclDeg = parseFloat(params.inclination) || 30;
-  const price = parseFloat(params.electricityPrice) || 0.22;
-  const feedIn = parseFloat(params.feedInTariff) || 0.05;
-  const consumptionKwh = parseFloat(params.annualConsumption) || 0;
-  const batteryCapKwh = parseFloat(params.batteryCapacity) || 0;
-
-  if (!cost || !panelW || !n || cost <= 0 || panelW <= 0 || n <= 0) return null;
-
-  const orientFactor =
-    ORIENTATIONS.find((o) => o.label === orientation)?.factor ?? 1.0;
-  const inclFactor = getInclinationFactor(inclDeg);
-
-  const totalPowerKwp = (panelW * n) / 1000;
-  const baseYield = 1550; // kWh/kWp/year — Portugal south-facing optimal
-  const annualProductionKwh = totalPowerKwp * baseYield * orientFactor * inclFactor;
-
-  const { selfKwh, selfRate } = calcSelfConsumption(
-    annualProductionKwh,
-    consumptionKwh,
-    hasBattery,
-    batteryCapKwh
-  );
-  const exportKwh = annualProductionKwh - selfKwh;
-
-  const annualSavingsEur = selfKwh * price + exportKwh * feedIn;
-  const monthlyKwh = MONTHLY_FACTORS.map((f) => annualProductionKwh * f);
-
-  const paybackYears = annualSavingsEur > 0 ? cost / annualSavingsEur : Infinity;
-
-  const consumptionCoveredPct =
-    consumptionKwh > 0 ? Math.min(100, (selfKwh / consumptionKwh) * 100) : null;
-
-  // 25-year projection: 0.5% annual panel degradation, 3% electricity price rise/year
-  const cumulativeNet: number[] = [];
-  let cumRevenue = 0;
-  for (let y = 1; y <= 25; y++) {
-    const degradation = Math.pow(0.995, y - 1);
-    const priceGrowth = Math.pow(1.03, y - 1);
-    cumRevenue += annualSavingsEur * degradation * priceGrowth;
-    cumulativeNet.push(cumRevenue - cost);
-  }
-
-  return {
-    totalPowerKwp,
-    annualProductionKwh,
-    monthlyKwh,
-    annualSavingsEur,
-    selfKwh,
-    selfRate,
-    exportKwh,
-    consumptionCoveredPct,
-    paybackYears,
-    netAfter20: cumulativeNet[19],
-    netAfter25: cumulativeNet[24],
-    cumulativeNet,
-  };
-}
 
 // ─── Monthly bar chart ────────────────────────────────────────────────────────
 function MonthlyChart({ data }: { data: number[] }) {
@@ -417,25 +252,13 @@ export default function RoiScreen() {
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 84 : insets.bottom + 80;
 
-  const [params, setParams] = useState<RoiParams>({
-    investmentCost: "",
-    panelPower: "",
-    numPanels: "",
-    inclination: "",
-    inverterPower: "",
-    annualConsumption: "",
-    batteryCapacity: "",
-    electricityPrice: "0.22",
-    feedInTariff: "0.05",
-  });
+  const {
+    params, orientation, hasBattery, results, selfRatePreview,
+    setOrientation, setHasBattery, updateParam, calculate,
+  } = useRoi();
 
-  const [orientation, setOrientation] = useState("S");
-  const [hasBattery, setHasBattery] = useState(false);
-  const [calculated, setCalculated] = useState(false);
-
-  const handleChange = (key: keyof RoiParams, value: string) => {
-    setParams((p) => ({ ...p, [key]: value }));
-    setCalculated(false);
+  const handleChange = (key: Parameters<typeof updateParam>[0], value: string) => {
+    updateParam(key, value);
   };
 
   const canCalculate =
@@ -444,26 +267,9 @@ export default function RoiScreen() {
     params.numPanels.trim() !== "" &&
     params.inclination.trim() !== "";
 
-  // Live self-consumption preview (before pressing Calculate)
-  const selfRatePreview = useMemo(() => {
-    const prod = parseFloat(params.panelPower) && parseFloat(params.numPanels)
-      ? ((parseFloat(params.panelPower) * parseFloat(params.numPanels)) / 1000) * 1550
-      : 0;
-    const cons = parseFloat(params.annualConsumption) || 0;
-    const cap = parseFloat(params.batteryCapacity) || 0;
-    if (prod <= 0) return null;
-    const { selfRate } = calcSelfConsumption(prod, cons, hasBattery, cap);
-    return selfRate;
-  }, [params.panelPower, params.numPanels, params.annualConsumption, params.batteryCapacity, hasBattery]);
-
-  const results = useMemo(() => {
-    if (!calculated) return null;
-    return computeRoi(params, orientation, hasBattery);
-  }, [calculated, params, orientation, hasBattery]);
-
   const handleCalculate = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setCalculated(true);
+    calculate();
   };
 
   const fmt = (n: number, decimals = 0) =>
@@ -559,7 +365,6 @@ export default function RoiScreen() {
                 ]}
                 onPress={() => {
                   setOrientation(o.label);
-                  setCalculated(false);
                 }}
               >
                 <Text
@@ -634,7 +439,6 @@ export default function RoiScreen() {
               value={hasBattery}
               onValueChange={(v) => {
                 setHasBattery(v);
-                setCalculated(false);
               }}
               trackColor={{ false: Colors.light.border, true: Colors.light.primary }}
               thumbColor={hasBattery ? Colors.light.card : Colors.light.backgroundSecondary}

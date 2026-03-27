@@ -28,6 +28,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "eurosign.circle", selected: "eurosign.circle.fill" }} />
         <Label>Retorno</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="report">
+        <Icon sf={{ default: "doc.richtext", selected: "doc.richtext.fill" }} />
+        <Label>Relatório</Label>
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
@@ -114,6 +118,18 @@ function ClassicTabLayout() {
               <SymbolView name="eurosign.circle" tintColor={color} size={24} />
             ) : (
               <MaterialCommunityIcons name="currency-eur" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="report"
+        options={{
+          title: "Relatório",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="doc.richtext" tintColor={color} size={24} />
+            ) : (
+              <MaterialCommunityIcons name="file-chart" size={22} color={color} />
             ),
         }}
       />
