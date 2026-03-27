@@ -49,7 +49,10 @@ export function LocationSearch({ latitude, onLatitudeChange }: LocationSearchPro
       try {
         const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&countrycodes=pt&format=json&limit=6&addressdetails=0`;
         const res = await fetch(url, {
-          headers: { "Accept-Language": "pt-PT,pt;q=0.9" },
+          headers: {
+            "Accept-Language": "pt-PT,pt;q=0.9",
+            "User-Agent": "FotoCalc/1.0 (Pinheiro Instalações Eléctricas; pinheiro.iec@gmail.com)",
+          },
         });
         const data: NominatimResult[] = await res.json();
         setResults(data);
