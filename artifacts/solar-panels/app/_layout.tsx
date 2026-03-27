@@ -17,6 +17,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SolarProvider } from "@/context/SolarContext";
 import { ClientProvider } from "@/context/ClientContext";
 import { RoiProvider } from "@/context/RoiContext";
+import { MapaProvider } from "@/context/MapaContext";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -53,7 +54,9 @@ export default function RootLayout() {
               <SolarProvider>
                 <RoiProvider>
                   <ClientProvider>
-                    <RootLayoutNav />
+                    <MapaProvider>
+                      <RootLayoutNav />
+                    </MapaProvider>
                   </ClientProvider>
                 </RoiProvider>
               </SolarProvider>

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -129,7 +129,7 @@ export function LocationSearch({ latitude, onLatitudeChange }: LocationSearchPro
       <View style={styles.inputWrapper}>
         <Ionicons name="location" size={16} color={Colors.light.accent} style={styles.icon} />
         <TextInput
-          style={styles.input}
+          style={[styles.input, Platform.OS === "web" && ({ outlineWidth: 0 } as any)]}
           value={query}
           onChangeText={search}
           placeholder="Ex: Lisboa, Porto, Faro..."

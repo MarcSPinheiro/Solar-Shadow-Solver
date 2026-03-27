@@ -22,11 +22,19 @@ Generates a professional PDF report with company branding for client presentatio
 - `context/SolarContext.tsx` — Panel spacing state + calculation
 - `context/RoiContext.tsx` — ROI state (lifted from roi.tsx), provides `useRoi()`
 - `context/ClientContext.tsx` — Client name/address/NIF/phone/email
-- `utils/pdfGenerator.ts` — HTML template + PDF generation via expo-print/expo-sharing
+- `context/MapaContext.tsx` — Roof map results (panelCount, area, kWp, orientation); shared to PDF
+- `utils/pdfGenerator.ts` — HTML template + PDF generation via expo-print/expo-sharing; includes mapa section
 - `assets/logo.png` — Company logo (background removed)
 
 ## Providers (app/_layout.tsx)
-`SolarProvider > RoiProvider > ClientProvider`
+`SolarProvider > RoiProvider > ClientProvider > MapaProvider`
+
+## Mapa Tab Features
+- Leaflet satellite map (Esri) with draw tools (rectangle + polygon)
+- Panel grid overlay: 4-corner strict containment; respects manualCount (stops exactly at N)
+- Grid offset nudge pad: ▲◄⌂►▼ buttons appear after drawing (shifts grid ±0.5m per tap)
+- Config: panelW, panelH, powerWp, manualCount, azimuth; auto/manual mode
+- Results saved to MapaContext → included in PDF report
 
 ## Key Packages
 `expo-print`, `expo-sharing`, `expo-file-system`, `expo-asset`, `react-native-svg`, `expo-haptics`

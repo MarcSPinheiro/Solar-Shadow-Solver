@@ -7,6 +7,7 @@ import type { SolarParams, SolarResults } from "@/context/SolarContext";
 import type { RoiParams, RoiResults } from "@/context/RoiContext";
 import { ORIENTATIONS } from "@/context/RoiContext";
 import type { ClientData } from "@/context/ClientContext";
+import type { MapaData } from "@/context/MapaContext";
 
 const MONTHS_PT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const MONTHS_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
@@ -551,6 +552,59 @@ function roiSection(params: RoiParams, results: RoiResults, hasBattery: boolean,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Section: Mapa Satélite
+// ═══════════════════════════════════════════════════════════════════════════════
+function mapaSection(m: MapaData): string {
+  const dirLabel = m.orientationLabel;
+  const penalty = m.penaltyPct > 0 ? ` (−${m.penaltyPct}% orientação ${dirLabel})` : " (orientação óptima)";
+  return `
+<div class="section" style="page-break-before:always">
+  <div class="section-header">
+    <span class="section-icon">🛰️</span>
+    <div>
+      <div class="section-title">Projeção no Telhado — Mapa Satélite</div>
+      <div class="section-sub">Posicionamento dos painéis sobre a cobertura real</div>
+    </div>
+  </div>
+
+  <table class="data-table" style="margin-bottom:14px">
+    <thead>
+      <tr><th colspan="2">Dimensões do Painel</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="td-key">Largura × Altura</td><td class="td-val">${m.panelW.toFixed(2)} m × ${m.panelH.toFixed(2)} m</td></tr>
+      <tr><td class="td-key">Potência unitária</td><td class="td-val">${m.powerWp} Wp</td></tr>
+      <tr><td class="td-key">Orientação</td><td class="td-val">${dirLabel} (${m.azimuth}°)</td></tr>
+    </tbody>
+  </table>
+
+  <table class="data-table">
+    <thead>
+      <tr><th colspan="2">Resultados da Projeção</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="td-key">Área do telhado desenhada</td><td class="td-val">${fmt(m.roofArea)} m²</td></tr>
+      <tr class="row-main">
+        <td class="td-key">Painéis posicionados no telhado</td>
+        <td class="td-val val-main">${m.panelCount} painéis</td>
+      </tr>
+      ${m.capacity > m.panelCount ? `<tr><td class="td-key">Capacidade máx. da área</td><td class="td-val">${m.capacity} painéis</td></tr>` : ""}
+      <tr><td class="td-key">Potência total instalada</td><td class="td-val">${m.totalKwp.toFixed(2)} kWp</td></tr>
+      <tr class="row-highlight">
+        <td class="td-key">Potência ajustada à orientação${penalty}</td>
+        <td class="td-val val-highlight">${m.adjKwp.toFixed(2)} kWp</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="formula-box" style="margin-top:12px">
+    <strong>Nota:</strong> A potência ajustada tem em conta a penalização de rendimento devida à orientação
+    (Sul = 0%, SE/SO ≈ 4%, E/O ≈ 16%, Norte ≈ 45%). O posicionamento foi definido pelo técnico sobre imagem satélite.
+  </div>
+</div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Full HTML document
 // ═══════════════════════════════════════════════════════════════════════════════
 function buildHtml(
@@ -561,10 +615,12 @@ function buildHtml(
   roiParams: RoiParams | null,
   roiResults: RoiResults | null,
   roiHasBattery: boolean,
-  roiOrientation: string
+  roiOrientation: string,
+  mapaData: MapaData | null
 ): string {
   const hasSpacing = solarResults !== null && solarParams !== null;
   const hasRoi = roiResults !== null && roiParams !== null;
+  const hasMapa = mapaData !== null;
 
   return `<!DOCTYPE html>
 <html lang="pt">
@@ -640,6 +696,7 @@ function buildHtml(
 
 ${hasSpacing ? spacingSection(solarParams!, solarResults!) : ""}
 ${hasRoi ? roiSection(roiParams!, roiResults!, roiHasBattery, roiOrientation) : ""}
+${hasMapa ? mapaSection(mapaData!) : ""}
 
 <div class="footer">
   <span>${COMPANY.name} · NIF ${COMPANY.nif}</span>
@@ -660,6 +717,7 @@ export interface GeneratePdfOptions {
   roiResults: RoiResults | null;
   roiHasBattery: boolean;
   roiOrientation: string;
+  mapaData: MapaData | null;
 }
 
 export async function generateAndSharePdf(opts: GeneratePdfOptions): Promise<void> {
@@ -668,7 +726,8 @@ export async function generateAndSharePdf(opts: GeneratePdfOptions): Promise<voi
     logoUrl, opts.client,
     opts.solarParams, opts.solarResults,
     opts.roiParams, opts.roiResults,
-    opts.roiHasBattery, opts.roiOrientation
+    opts.roiHasBattery, opts.roiOrientation,
+    opts.mapaData
   );
 
   if (Platform.OS === "web") {

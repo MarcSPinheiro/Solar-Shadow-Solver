@@ -17,6 +17,7 @@ import { useClient } from "@/context/ClientContext";
 import { LogoMini } from "@/components/LogoMini";
 import { useRoi } from "@/context/RoiContext";
 import { useSolar } from "@/context/SolarContext";
+import { useMapaContext } from "@/context/MapaContext";
 import { generateAndSharePdf } from "@/utils/pdfGenerator";
 
 function Section({ icon, title, children }: { icon: string; title: string; children: React.ReactNode }) {
@@ -54,11 +55,13 @@ export default function ReportScreen() {
   const { client, updateClient } = useClient();
   const { params: roiParams, results: roiResults, hasBattery, orientation } = useRoi();
   const { params: solarParams, results: solarResults } = useSolar();
+  const { mapaData } = useMapaContext();
 
   const [generating, setGenerating] = useState(false);
 
   const hasSpacing = solarResults !== null;
   const hasRoi = roiResults !== null;
+  const hasMapa = mapaData !== null;
 
   const handleGenerate = async () => {
     if (!client.name.trim()) {
@@ -75,6 +78,7 @@ export default function ReportScreen() {
         roiResults,
         roiHasBattery: hasBattery,
         roiOrientation: orientation,
+        mapaData,
       });
     } catch (e: any) {
       Alert.alert("Erro", "Não foi possível gerar o relatório. Tente novamente.\n\n" + (e?.message ?? ""));
@@ -104,6 +108,7 @@ export default function ReportScreen() {
       <Section icon="database-check-outline" title="Dados incluídos no relatório">
         <StatusBadge hasData={hasSpacing} label="Estudo de dimensionamento" tab="Calcular" />
         <StatusBadge hasData={hasRoi} label="Análise de retorno (ROI)" tab="Retorno" />
+        <StatusBadge hasData={hasMapa} label="Projeção no telhado (Mapa)" tab="Mapa" />
         <View style={styles.infoBox}>
           <Feather name="info" size={14} color="#4A6072" />
           <Text style={styles.infoText}>

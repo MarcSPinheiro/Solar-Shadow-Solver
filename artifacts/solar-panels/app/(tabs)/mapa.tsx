@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialCommunityIcons, Feather } from "@expo/vector-icons";
 import Colors from "@/constants/colors";
 import { useSolar } from "@/context/SolarContext";
+import { useMapaContext } from "@/context/MapaContext";
 import { LogoMini } from "@/components/LogoMini";
 
 /* ─── Utilitários de orientação ────────────────────────────────── */
@@ -55,11 +56,37 @@ html, body { height: 100%; overflow: hidden; background: #0D2B45; }
 }
 .leaflet-draw-toolbar a { background-color: #0D2B45 !important; }
 .leaflet-draw-toolbar a:hover { background-color: #1a3d5c !important; }
+.nudge-pad {
+  position: absolute; bottom: 48px; left: 8px; z-index: 1001;
+  display: grid; grid-template-columns: repeat(3, 30px); grid-template-rows: repeat(3, 30px);
+  gap: 2px;
+}
+.nudge-btn {
+  background: rgba(13,43,69,0.88); color: #F5A623; border: 1px solid rgba(245,166,35,0.5);
+  border-radius: 6px; font-size: 14px; cursor: pointer; display: flex;
+  align-items: center; justify-content: center; width: 30px; height: 30px;
+  font-family: -apple-system, sans-serif; user-select: none; -webkit-user-select: none;
+  touch-action: manipulation;
+}
+.nudge-btn:active { background: rgba(30,136,229,0.7); }
+.nudge-reset { font-size: 11px; color: #fff; }
 </style>
 </head>
 <body>
 <div id="map"></div>
 <div id="info" class="info-bar">📐 Desenhe a área do telhado</div>
+
+<div class="nudge-pad" id="nudgePad" style="display:none">
+  <div></div>
+  <button class="nudge-btn" ontouchstart="nudge(0,-0.5)" onclick="nudge(0,-0.5)">▲</button>
+  <div></div>
+  <button class="nudge-btn" ontouchstart="nudge(-0.5,0)" onclick="nudge(-0.5,0)">◄</button>
+  <button class="nudge-btn nudge-reset" ontouchstart="nudge(0,0,true)" onclick="nudge(0,0,true)">⌂</button>
+  <button class="nudge-btn" ontouchstart="nudge(0.5,0)" onclick="nudge(0.5,0)">►</button>
+  <div></div>
+  <button class="nudge-btn" ontouchstart="nudge(0,0.5)" onclick="nudge(0,0.5)">▼</button>
+  <div></div>
+</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
@@ -90,7 +117,14 @@ var drawControl = new L.Control.Draw({
 });
 map.addControl(drawControl);
 
-var CFG = { panelW: 1.0, panelH: 2.0, rowSpacing: 0.5, colSpacing: 0.05, azimuth: 180, manualCount: 0 };
+var CFG = { panelW: 1.0, panelH: 2.0, rowSpacing: 0.5, colSpacing: 0.05, azimuth: 180, manualCount: 0, offsetX: 0, offsetY: 0 };
+var currentLayer = null;
+
+function nudge(dx, dy, reset) {
+  if (reset) { CFG.offsetX = 0; CFG.offsetY = 0; }
+  else { CFG.offsetX += dx; CFG.offsetY += dy; }
+  if (currentLayer) onLayerChange(currentLayer);
+}
 
 function sendRN(obj) {
   var s = JSON.stringify(obj);
@@ -131,12 +165,14 @@ function drawPanels(layer) {
 
   for (var y = -R; y < R && !done; y += stepY) {
     for (var x = -R; x < R && !done; x += stepX) {
-      /* 4 cantos do painel no referencial local (N positivo para cima) */
+      /* 4 cantos do painel no referencial local, com offset de posicionamento */
+      var px = x + CFG.offsetX;
+      var py = y + CFG.offsetY;
       var corners = [
-        [x,                y               ],
-        [x + CFG.panelW,   y               ],
-        [x + CFG.panelW,   y + CFG.panelH  ],
-        [x,                y + CFG.panelH  ]
+        [px,                py               ],
+        [px + CFG.panelW,   py               ],
+        [px + CFG.panelW,   py + CFG.panelH  ],
+        [px,                py + CFG.panelH  ]
       ];
       /* Rodar e converter para lat/lng */
       var latlngs = corners.map(function(c) {
@@ -182,10 +218,20 @@ function onLayerChange(layer) {
   sendRN({ type: 'roofMeasured', area: Math.round(area), panelCount: res.drawn, capacity: res.capacity });
 }
 
-map.on('draw:created', function(e) { drawnItems.clearLayers(); drawnItems.addLayer(e.layer); onLayerChange(e.layer); });
-map.on('draw:edited', function(e) { e.layers.eachLayer(function(l) { onLayerChange(l); }); });
+map.on('draw:created', function(e) {
+  drawnItems.clearLayers();
+  drawnItems.addLayer(e.layer);
+  currentLayer = e.layer;
+  document.getElementById('nudgePad').style.display = 'grid';
+  onLayerChange(e.layer);
+});
+map.on('draw:edited', function(e) {
+  e.layers.eachLayer(function(l) { currentLayer = l; onLayerChange(l); });
+});
 map.on('draw:deleted', function() {
   panelLayer.clearLayers();
+  currentLayer = null;
+  document.getElementById('nudgePad').style.display = 'none';
   document.getElementById('info').textContent = '📐 Desenhe a área do telhado';
   sendRN({ type: 'cleared' });
 });
@@ -217,14 +263,15 @@ setTimeout(function() { sendRN({ type: 'ready' }); }, 600);
 export default function MapaScreen() {
   const insets = useSafeAreaInsets();
   const { params, results } = useSolar();
+  const { setMapaData } = useMapaContext();
   const webRef = useRef<WebMapRef>(null);
 
   /* Config dos painéis — pré-preenchida com valores do calculador */
   const [panelW, setPanelW] = useState(
-    String(parseFloat(params.panelWidth) || 1.13)
+    String(parseFloat(params.width) || 1.13)
   );
   const [panelH, setPanelH] = useState(
-    String(parseFloat(params.panelHeight) || 2.28)
+    String(parseFloat(params.height) || 2.28)
   );
   const [panelPower, setPanelPower] = useState("400");
   const [azimuth, setAzimuth] = useState(180);
@@ -280,8 +327,25 @@ export default function MapaScreen() {
         setArea(d.area);
         setPanels(d.panelCount);
         setCapacity(d.capacity ?? d.panelCount);
+        /* Guardar no contexto global para o relatório PDF */
+        const fPanels = d.panelCount as number;
+        const fPower = parseFloat(panelPower) || 400;
+        const fFactor = orientationFactor(azimuth);
+        setMapaData({
+          roofArea: d.area,
+          panelCount: fPanels,
+          capacity: d.capacity ?? fPanels,
+          totalKwp: parseFloat(((fPanels * fPower) / 1000).toFixed(2)),
+          adjKwp: parseFloat(((fPanels * fPower * fFactor) / 1000).toFixed(2)),
+          azimuth,
+          orientationLabel: azLabel(azimuth),
+          penaltyPct: Math.round((1 - fFactor) * 100),
+          panelW: parseFloat(panelW) || 1.13,
+          panelH: parseFloat(panelH) || 2.28,
+          powerWp: fPower,
+        });
       }
-      if (d.type === "cleared") { setArea(null); setPanels(null); setCapacity(null); }
+      if (d.type === "cleared") { setArea(null); setPanels(null); setCapacity(null); setMapaData(null); }
     } catch (_) {}
   };
 
