@@ -24,6 +24,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "square.grid.3x3", selected: "square.grid.3x3.fill" }} />
         <Label>Layout</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="roi">
+        <Icon sf={{ default: "eurosign.circle", selected: "eurosign.circle.fill" }} />
+        <Label>Retorno</Label>
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
@@ -98,6 +102,18 @@ function ClassicTabLayout() {
               <SymbolView name="square.grid.3x3" tintColor={color} size={24} />
             ) : (
               <MaterialCommunityIcons name="view-grid" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="roi"
+        options={{
+          title: "Retorno",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="eurosign.circle" tintColor={color} size={24} />
+            ) : (
+              <MaterialCommunityIcons name="currency-eur" size={22} color={color} />
             ),
         }}
       />
