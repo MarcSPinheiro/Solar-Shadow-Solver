@@ -222,10 +222,11 @@ export default function MapaScreen() {
   );
   const [panelPower, setPanelPower] = useState("400");
   const [azimuth, setAzimuth] = useState(180);
+  const [manualCount, setManualCount] = useState(""); // vazio = automático
 
   /* Resultados da área desenhada */
   const [area, setArea] = useState<number | null>(null);
-  const [panels, setPanels] = useState<number | null>(null);
+  const [panels, setPanels] = useState<number | null>(null); // auto
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 84 : insets.bottom + 80;
@@ -234,8 +235,15 @@ export default function MapaScreen() {
   const factor = orientationFactor(azimuth);
   const penaltyPct = Math.round((1 - factor) * 100);
   const powerWp = parseFloat(panelPower) || 400;
-  const totalKwp = panels ? ((panels * powerWp) / 1000).toFixed(2) : null;
-  const adjKwp = panels ? ((panels * powerWp * factor) / 1000).toFixed(2) : null;
+  // Número efectivo de painéis: manual tem prioridade sobre o automático
+  const isManual = manualCount.trim() !== "" && parseInt(manualCount) > 0;
+  const effectivePanels = isManual ? parseInt(manualCount) : panels;
+  const totalKwp = effectivePanels
+    ? ((effectivePanels * powerWp) / 1000).toFixed(2)
+    : null;
+  const adjKwp = effectivePanels
+    ? ((effectivePanels * powerWp * factor) / 1000).toFixed(2)
+    : null;
 
   /* ── Envia config ao WebView ── */
   const pushConfig = useCallback(() => {
@@ -299,7 +307,7 @@ export default function MapaScreen() {
 
       {/* ── Painel de configuração ─── */}
       <View style={styles.configBox}>
-        {/* Linha 1 — dimensões e potência */}
+        {/* Linha 1 — dimensões, potência e nº painéis */}
         <View style={styles.configRow}>
           <View style={styles.cfgGroup}>
             <Text style={styles.cfgLbl}>Largura (m)</Text>
@@ -324,7 +332,7 @@ export default function MapaScreen() {
               placeholderTextColor={Colors.light.tabIconDefault}
             />
           </View>
-          <View style={[styles.cfgGroup, { flex: 1.4 }]}>
+          <View style={styles.cfgGroup}>
             <Text style={styles.cfgLbl}>Potência (Wp)</Text>
             <TextInput
               style={styles.cfgInput}
@@ -332,6 +340,20 @@ export default function MapaScreen() {
               onChangeText={setPanelPower}
               keyboardType="numeric"
               placeholder="400"
+              placeholderTextColor={Colors.light.tabIconDefault}
+            />
+          </View>
+          <View style={styles.cfgGroup}>
+            <Text style={styles.cfgLbl}>Nº Painéis</Text>
+            <TextInput
+              style={[
+                styles.cfgInput,
+                isManual && { borderColor: Colors.light.panel, borderWidth: 1.5 },
+              ]}
+              value={manualCount}
+              onChangeText={setManualCount}
+              keyboardType="numeric"
+              placeholder={panels ? String(panels) : "auto"}
               placeholderTextColor={Colors.light.tabIconDefault}
             />
           </View>
@@ -388,25 +410,36 @@ export default function MapaScreen() {
 
       {/* ── Resultados ─── */}
       <View style={[styles.results, { paddingBottom: bottomInset }]}>
-        {area ? (
+        {effectivePanels ? (
           <>
             <View style={styles.cards}>
-              <View style={styles.card}>
-                <Text style={styles.cardVal}>{area} m²</Text>
-                <Text style={styles.cardLbl}>Área do telhado</Text>
-              </View>
+              {area ? (
+                <View style={styles.card}>
+                  <Text style={styles.cardVal}>{area} m²</Text>
+                  <Text style={styles.cardLbl}>Área do telhado</Text>
+                </View>
+              ) : null}
               <View style={[styles.card, styles.cardHighlight]}>
-                <Text style={[styles.cardVal, { color: Colors.light.panel }]}>{panels}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                  <Text style={[styles.cardVal, { color: Colors.light.panel }]}>
+                    {effectivePanels}
+                  </Text>
+                  {isManual && (
+                    <View style={styles.manualBadge}>
+                      <Text style={styles.manualBadgeTxt}>✎</Text>
+                    </View>
+                  )}
+                </View>
                 <Text style={styles.cardLbl}>
                   Painéis{"\n"}
-                  {parseFloat(panelW).toFixed(2)}×{parseFloat(panelH).toFixed(2)} m
+                  {isManual ? "definido manualmente" : "calculado pelo mapa"}
                 </Text>
               </View>
               <View style={styles.card}>
                 <Text style={styles.cardVal}>{totalKwp} kWp</Text>
-                <Text style={styles.cardLbl}>Potência total</Text>
+                <Text style={styles.cardLbl}>Potência total{"\n"}({effectivePanels}×{powerWp}W)</Text>
               </View>
-              <View style={[styles.card, { backgroundColor: Colors.light.backgroundSecondary }]}>
+              <View style={[styles.card, { borderColor: Colors.light.success + "80", borderWidth: 1.5 }]}>
                 <Text style={[styles.cardVal, { color: Colors.light.success }]}>{adjKwp} kWp</Text>
                 <Text style={styles.cardLbl}>
                   Ajustada{"\n"}({dirLabel}, -{penaltyPct}%)
@@ -414,15 +447,16 @@ export default function MapaScreen() {
               </View>
             </View>
             <Text style={styles.note}>
-              ✏️ Clique na forma para editar · 🗑 para apagar · Orientação ideal: Sul (180°)
+              {isManual
+                ? `Nº manual: ${effectivePanels} painéis · Limpe o campo "Nº Painéis" para modo automático`
+                : "✏️ Edite a forma no mapa · Orientação ideal: Sul (180°)"}
             </Text>
           </>
         ) : (
           <View style={styles.hint}>
             <MaterialCommunityIcons name="gesture-tap" size={22} color={Colors.light.tabIconDefault} />
             <Text style={styles.hintTxt}>
-              Use ◻ ou ⬡ no mapa para desenhar a área do telhado.{"\n"}
-              A grelha de painéis e os cálculos aparecem automaticamente.
+              Introduza o Nº de Painéis acima, ou use ◻/⬡ no mapa para calcular automaticamente.
             </Text>
           </View>
         )}
@@ -522,4 +556,9 @@ const styles = StyleSheet.create({
     flex: 1, fontSize: 12, fontFamily: "Inter_400Regular",
     color: Colors.light.tabIconDefault, lineHeight: 18,
   },
+  manualBadge: {
+    backgroundColor: Colors.light.panel + "22",
+    borderRadius: 4, paddingHorizontal: 3,
+  },
+  manualBadgeTxt: { fontSize: 10, color: Colors.light.panel },
 });
