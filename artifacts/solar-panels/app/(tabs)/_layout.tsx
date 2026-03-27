@@ -24,6 +24,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "square.grid.3x3", selected: "square.grid.3x3.fill" }} />
         <Label>Layout</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="mapa">
+        <Icon sf={{ default: "map", selected: "map.fill" }} />
+        <Label>Mapa</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="roi">
         <Icon sf={{ default: "eurosign.circle", selected: "eurosign.circle.fill" }} />
         <Label>Retorno</Label>
@@ -106,6 +110,18 @@ function ClassicTabLayout() {
               <SymbolView name="square.grid.3x3" tintColor={color} size={24} />
             ) : (
               <MaterialCommunityIcons name="view-grid" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="mapa"
+        options={{
+          title: "Mapa",
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="map" tintColor={color} size={24} />
+            ) : (
+              <MaterialCommunityIcons name="map-search" size={22} color={color} />
             ),
         }}
       />

@@ -10,12 +10,13 @@ Generates a professional PDF report with company branding for client presentatio
 - **Address**: Quinta do Chão Grande nº78 Massarocas, 3660-409 São Pedro do Sul
 - **NIF**: 506505170 | **Tel**: 964 119 508
 
-## App Tabs (5 tabs)
+## App Tabs (6 tabs)
 1. **Calcular** (`index.tsx`) — Panel spacing input form
 2. **Diagrama** (`diagram.tsx`) — SVG cross-section diagram
 3. **Layout** (`overview.tsx`) — Top-down array layout diagram (1:1 scale, N/S labels)
-4. **Retorno** (`roi.tsx`) — ROI analysis with charts + 25-year projection
-5. **Relatório** (`report.tsx`) — Client data form + PDF generation
+4. **Mapa** (`mapa.tsx`) — Satellite map (Esri, no API key) with Leaflet.Draw; user draws roof area → panel grid overlay + count + kWp
+5. **Retorno** (`roi.tsx`) — ROI analysis with charts + 25-year projection
+6. **Relatório** (`report.tsx`) — Client data form + PDF generation
 
 ## Key Files
 - `context/SolarContext.tsx` — Panel spacing state + calculation
