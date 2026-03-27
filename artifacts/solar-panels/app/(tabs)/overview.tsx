@@ -26,7 +26,7 @@ function ArrayLayoutDiagram() {
   const { panelWidth, panelProjectedDepth, rowSpacing, gap } = results;
 
   // Escala UNIFORME para X e Y — proporções reais
-  const drawableW = 270;
+  const drawableW = 260;
   const totalW = cols * panelWidth + (cols - 1) * 0.05;
   const totalD = (rows - 1) * rowSpacing + panelProjectedDepth;
   const scale = Math.min(drawableW / totalW, 38); // px/m, máx 38
@@ -37,12 +37,16 @@ function ArrayLayoutDiagram() {
   const rowSpacingPx = rowSpacing * scale;
   const gapPx = gap * scale;
 
-  const offsetX = 46;
-  const offsetY = 28;
-  const dimRightW = 70; // espaço para cotas à direita
+  // Offsets maiores para acomodar 2 níveis de cotas (total + painel individual)
+  const offsetX = 72; // esquerda: cota total (x=10) + cota painel (x=46)
+  const offsetY = 58; // topo: cota total (y=12) + cota painel (y=34)
+  const dimRightW = 70; // espaço para cotas de fileira à direita
 
-  const svgW = offsetX + cols * panelW + (cols - 1) * colGapPx + dimRightW;
-  const svgH = offsetY + totalD * scale + 56;
+  const arrayWidthPx = cols * panelW + (cols - 1) * colGapPx;
+  const arrayDepthPx = totalD * scale;
+
+  const svgW = offsetX + arrayWidthPx + dimRightW;
+  const svgH = offsetY + arrayDepthPx + 60;
 
   const scaleBarPx = 1 * scale; // barra de escala = 1m
 
@@ -52,7 +56,58 @@ function ArrayLayoutDiagram() {
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <Svg width={Math.max(svgW, 300)} height={svgH}>
 
-          {/* Zonas de espaço livre entre fileiras */}
+          {/* ── COTA LARGURA TOTAL (topo, nível exterior, navy) ─────────── */}
+          <Line x1={offsetX} y1={12} x2={offsetX + arrayWidthPx} y2={12}
+            stroke={Colors.light.secondary} strokeWidth={1.5} />
+          <Line x1={offsetX} y1={7} x2={offsetX} y2={17}
+            stroke={Colors.light.secondary} strokeWidth={1.5} />
+          <Line x1={offsetX + arrayWidthPx} y1={7} x2={offsetX + arrayWidthPx} y2={17}
+            stroke={Colors.light.secondary} strokeWidth={1.5} />
+          <SvgText x={offsetX + arrayWidthPx / 2} y={9} fontSize="9"
+            fill={Colors.light.secondary} textAnchor="middle" fontWeight="700">
+            {`Largura total: ${results.totalWidth.toFixed(2)} m`}
+          </SvgText>
+
+          {/* ── COTA LARGURA PAINEL (topo, nível interior, accent) ──────── */}
+          <Line x1={offsetX} y1={offsetY - 18} x2={offsetX + panelW} y2={offsetY - 18}
+            stroke={Colors.light.accent} strokeWidth={1} />
+          <Line x1={offsetX} y1={offsetY - 21} x2={offsetX} y2={offsetY - 15}
+            stroke={Colors.light.accent} strokeWidth={1} />
+          <Line x1={offsetX + panelW} y1={offsetY - 21} x2={offsetX + panelW} y2={offsetY - 15}
+            stroke={Colors.light.accent} strokeWidth={1} />
+          <SvgText x={offsetX + panelW / 2} y={offsetY - 21} fontSize="8"
+            fill={Colors.light.accent} textAnchor="middle" fontWeight="600">
+            {`L=${panelWidth.toFixed(2)}m`}
+          </SvgText>
+
+          {/* ── COTA COMPRIMENTO TOTAL (esquerda, nível exterior, navy) ──── */}
+          <Line x1={14} y1={offsetY} x2={14} y2={offsetY + arrayDepthPx}
+            stroke={Colors.light.secondary} strokeWidth={1.5} />
+          <Line x1={9} y1={offsetY} x2={19} y2={offsetY}
+            stroke={Colors.light.secondary} strokeWidth={1.5} />
+          <Line x1={9} y1={offsetY + arrayDepthPx} x2={19} y2={offsetY + arrayDepthPx}
+            stroke={Colors.light.secondary} strokeWidth={1.5} />
+          <SvgText
+            x={10} y={offsetY + arrayDepthPx / 2} fontSize="9"
+            fill={Colors.light.secondary} textAnchor="middle" fontWeight="700"
+            transform={`rotate(-90, 10, ${offsetY + arrayDepthPx / 2})`}>
+            {`Comprimento total: ${results.totalLength.toFixed(2)} m`}
+          </SvgText>
+
+          {/* ── COTA PROFUNDIDADE PAINEL (esquerda, nível interior, accent) */}
+          <Line x1={offsetX - 22} y1={offsetY} x2={offsetX - 22} y2={offsetY + panelD}
+            stroke={Colors.light.accent} strokeWidth={1} />
+          <Line x1={offsetX - 25} y1={offsetY} x2={offsetX - 19} y2={offsetY}
+            stroke={Colors.light.accent} strokeWidth={1} />
+          <Line x1={offsetX - 25} y1={offsetY + panelD} x2={offsetX - 19} y2={offsetY + panelD}
+            stroke={Colors.light.accent} strokeWidth={1} />
+          <SvgText x={offsetX - 32} y={offsetY + panelD / 2 + 3} fontSize="8"
+            fill={Colors.light.accent} textAnchor="middle" fontWeight="600"
+            transform={`rotate(-90, ${offsetX - 32}, ${offsetY + panelD / 2 + 3})`}>
+            {`${panelProjectedDepth.toFixed(2)}m`}
+          </SvgText>
+
+          {/* ── Zonas de espaço livre entre fileiras ──────────────────────── */}
           {Array.from({ length: rows - 1 }).map((_, r) => {
             const yGapStart = offsetY + r * rowSpacingPx + panelD;
             return (
@@ -60,7 +115,7 @@ function ArrayLayoutDiagram() {
                 key={`gap-bg-${r}`}
                 x={offsetX}
                 y={yGapStart}
-                width={cols * panelW + (cols - 1) * colGapPx}
+                width={arrayWidthPx}
                 height={gapPx}
                 fill="rgba(229,62,62,0.07)"
                 stroke="rgba(229,62,62,0.20)"
@@ -69,7 +124,7 @@ function ArrayLayoutDiagram() {
             );
           })}
 
-          {/* Painéis */}
+          {/* ── Painéis ───────────────────────────────────────────────────── */}
           {Array.from({ length: rows }).map((_, r) =>
             Array.from({ length: cols }).map((_, c) => {
               const x = offsetX + c * (panelW + colGapPx);
@@ -89,12 +144,12 @@ function ArrayLayoutDiagram() {
             })
           )}
 
-          {/* Cotas direita: início→início e espaço livre */}
+          {/* ── Cotas direita: início→início e espaço livre ───────────────── */}
           {Array.from({ length: rows - 1 }).map((_, r) => {
             const yTop = offsetY + r * rowSpacingPx;
             const yNext = offsetY + (r + 1) * rowSpacingPx;
             const yGapStart = yTop + panelD;
-            const xD = offsetX + cols * panelW + (cols - 1) * colGapPx + 12;
+            const xD = offsetX + arrayWidthPx + 12;
             const xG = xD + 28;
             return (
               <G key={`dim-${r}`}>
@@ -118,38 +173,13 @@ function ArrayLayoutDiagram() {
             );
           })}
 
-          {/* Cota largura painel (topo) */}
-          <Line x1={offsetX} y1={offsetY - 14} x2={offsetX + panelW} y2={offsetY - 14}
-            stroke={Colors.light.accent} strokeWidth={1} />
-          <Line x1={offsetX} y1={offsetY - 17} x2={offsetX} y2={offsetY - 11}
-            stroke={Colors.light.accent} strokeWidth={1} />
-          <Line x1={offsetX + panelW} y1={offsetY - 17} x2={offsetX + panelW} y2={offsetY - 11}
-            stroke={Colors.light.accent} strokeWidth={1} />
-          <SvgText x={offsetX + panelW / 2} y={offsetY - 17} fontSize="8"
-            fill={Colors.light.accent} textAnchor="middle" fontWeight="600">
-            {`L=${panelWidth.toFixed(2)}m`}
-          </SvgText>
-
-          {/* Cota prof. painel (esquerda) */}
-          <Line x1={offsetX - 14} y1={offsetY} x2={offsetX - 14} y2={offsetY + panelD}
-            stroke={Colors.light.accent} strokeWidth={1} />
-          <Line x1={offsetX - 17} y1={offsetY} x2={offsetX - 11} y2={offsetY}
-            stroke={Colors.light.accent} strokeWidth={1} />
-          <Line x1={offsetX - 17} y1={offsetY + panelD} x2={offsetX - 11} y2={offsetY + panelD}
-            stroke={Colors.light.accent} strokeWidth={1} />
-          <SvgText x={offsetX - 26} y={offsetY + panelD / 2 + 3} fontSize="8"
-            fill={Colors.light.accent} textAnchor="middle" fontWeight="600"
-            transform={`rotate(-90, ${offsetX - 26}, ${offsetY + panelD / 2 + 3})`}>
-            {`${panelProjectedDepth.toFixed(2)}m`}
-          </SvgText>
-
-          {/* Seta Norte ↑ e Sul ↓ */}
+          {/* ── Seta Norte ↑ e Sul ↓ ─────────────────────────────────────── */}
           <SvgText x={offsetX - 8} y={offsetY + 6} fontSize="8" fill={Colors.light.tabIconDefault} textAnchor="end">N↑</SvgText>
-          <SvgText x={offsetX - 8} y={offsetY + totalD * scale} fontSize="8" fill={Colors.light.tabIconDefault} textAnchor="end">S↓</SvgText>
+          <SvgText x={offsetX - 8} y={offsetY + arrayDepthPx} fontSize="8" fill={Colors.light.tabIconDefault} textAnchor="end">S↓</SvgText>
 
-          {/* Barra de escala */}
+          {/* ── Barra de escala ───────────────────────────────────────────── */}
           {(() => {
-            const barY = offsetY + totalD * scale + 22;
+            const barY = offsetY + arrayDepthPx + 24;
             const barX = offsetX;
             return (
               <G>
