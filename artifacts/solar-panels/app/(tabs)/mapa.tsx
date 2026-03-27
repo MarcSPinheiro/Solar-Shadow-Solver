@@ -90,7 +90,7 @@ var drawControl = new L.Control.Draw({
 });
 map.addControl(drawControl);
 
-var CFG = { panelW: 1.0, panelH: 2.0, rowSpacing: 0.5, colSpacing: 0.05, azimuth: 180 };
+var CFG = { panelW: 1.0, panelH: 2.0, rowSpacing: 0.5, colSpacing: 0.05, azimuth: 180, manualCount: 0 };
 
 function sendRN(obj) {
   var s = JSON.stringify(obj);
@@ -105,17 +105,14 @@ function rotXY(x, y, deg) {
   return [ x * Math.cos(r) - y * Math.sin(r), x * Math.sin(r) + y * Math.cos(r) ];
 }
 function toLatlng(nx, ny, cLat, cLng) {
-  return [
-    cLat + ny / 110574,
-    cLng + nx / (111320 * Math.cos(cLat * Math.PI / 180))
-  ];
+  return [ cLat + ny / 110574, cLng + nx / (111320 * Math.cos(cLat * Math.PI / 180)) ];
 }
 
 /* ── Desenha grelha de painéis rotacionada ── */
 function drawPanels(layer) {
   panelLayer.clearLayers();
   var bounds = layer.getBounds ? layer.getBounds() : null;
-  if (!bounds) return 0;
+  if (!bounds) return { drawn: 0, capacity: 0 };
 
   var center = bounds.getCenter();
   var cLat = center.lat, cLng = center.lng;
@@ -124,38 +121,44 @@ function drawPanels(layer) {
   var halfH = nw.distanceTo(bounds.getSouthWest()) / 2;
   var R = Math.sqrt(halfW * halfW + halfH * halfH) + Math.max(CFG.panelW, CFG.panelH);
 
-  var rotDeg = CFG.azimuth - 180; // rotação da grelha relativamente ao sul
+  var rotDeg = CFG.azimuth - 180;
   var stepX = CFG.panelW + CFG.colSpacing;
   var stepY = CFG.panelH + CFG.rowSpacing;
 
-  var count = 0, drawn = 0;
-  for (var y = -R; y < R; y += stepY) {
-    for (var x = -R; x < R; x += stepX) {
-      /* Centro do painel no referencial local (antes de rotar) */
-      var cx = x + CFG.panelW / 2;
-      var cy = y + CFG.panelH / 2;
-      /* Rodar o centro e verificar se está dentro dos bounds */
-      var rc = rotXY(cx, -cy, rotDeg);
-      var pLat = cLat + rc[1] / 110574;
-      var pLng = cLng + rc[0] / (111320 * Math.cos(cLat * Math.PI / 180));
-      if (!bounds.contains([pLat, pLng])) continue;
+  /* limite: se manual > 0 usa-o; senão limita a 500 por performance */
+  var limit = CFG.manualCount > 0 ? CFG.manualCount : 500;
+  var drawn = 0, capacity = 0, done = false;
 
-      count++;
-      if (drawn < 500) {
-        /* 4 cantos do painel (referencial local) */
-        var corners = [[x, y],[x + CFG.panelW, y],[x + CFG.panelW, y + CFG.panelH],[x, y + CFG.panelH]];
-        var latlngs = corners.map(function(c) {
-          var r = rotXY(c[0], -c[1], rotDeg);
-          return toLatlng(r[0], r[1], cLat, cLng);
-        });
+  for (var y = -R; y < R && !done; y += stepY) {
+    for (var x = -R; x < R && !done; x += stepX) {
+      /* 4 cantos do painel no referencial local (N positivo para cima) */
+      var corners = [
+        [x,                y               ],
+        [x + CFG.panelW,   y               ],
+        [x + CFG.panelW,   y + CFG.panelH  ],
+        [x,                y + CFG.panelH  ]
+      ];
+      /* Rodar e converter para lat/lng */
+      var latlngs = corners.map(function(c) {
+        var r = rotXY(c[0], -c[1], rotDeg);
+        return toLatlng(r[0], r[1], cLat, cLng);
+      });
+      /* ← CORRECÇÃO: todos os 4 cantos têm de estar dentro da área */
+      var allInside = latlngs.every(function(pt) { return bounds.contains(pt); });
+      if (!allInside) continue;
+
+      capacity++; /* quantos cabem na área */
+      if (drawn < limit) {
         L.polygon(latlngs, {
           color: '#1E88E5', weight: 0.8, fillColor: '#2B6CB0', fillOpacity: 0.78,
         }).addTo(panelLayer);
         drawn++;
+        /* ← CORRECÇÃO: parar ao atingir o número manual */
+        if (CFG.manualCount > 0 && drawn >= CFG.manualCount) done = true;
       }
     }
   }
-  return count;
+  return { drawn: drawn, capacity: capacity };
 }
 
 function onLayerChange(layer) {
@@ -171,10 +174,12 @@ function onLayerChange(layer) {
     var nw = bounds.getNorthWest();
     area = nw.distanceTo(bounds.getNorthEast()) * nw.distanceTo(bounds.getSouthWest());
   }
-  var count = drawPanels(layer);
-  document.getElementById('info').textContent =
-    'Área: ' + area.toFixed(0) + ' m\u00B2  \u2502  Painéis: ' + count;
-  sendRN({ type: 'roofMeasured', area: Math.round(area), panelCount: count });
+  var res = drawPanels(layer);
+  var label = res.drawn === res.capacity
+    ? 'Painéis: ' + res.drawn
+    : 'Painéis: ' + res.drawn + ' (cap. ' + res.capacity + ')';
+  document.getElementById('info').textContent = 'Área: ' + area.toFixed(0) + ' m\u00B2  |  ' + label;
+  sendRN({ type: 'roofMeasured', area: Math.round(area), panelCount: res.drawn, capacity: res.capacity });
 }
 
 map.on('draw:created', function(e) { drawnItems.clearLayers(); drawnItems.addLayer(e.layer); onLayerChange(e.layer); });
@@ -195,6 +200,7 @@ function handleMsg(e) {
       if (d.rowSpacing >= 0) CFG.rowSpacing = d.rowSpacing;
       if (d.colSpacing >= 0) CFG.colSpacing = d.colSpacing;
       if (d.azimuth !== undefined) CFG.azimuth = d.azimuth;
+      if (d.manualCount !== undefined) CFG.manualCount = d.manualCount;
       drawnItems.eachLayer(function(l) { onLayerChange(l); });
     }
     if (d.type === 'flyTo') { map.flyTo([d.lat, d.lng], d.zoom || 19, { duration: 1.5 }); }
@@ -226,7 +232,8 @@ export default function MapaScreen() {
 
   /* Resultados da área desenhada */
   const [area, setArea] = useState<number | null>(null);
-  const [panels, setPanels] = useState<number | null>(null); // auto
+  const [panels, setPanels] = useState<number | null>(null);   // desenhados no mapa
+  const [capacity, setCapacity] = useState<number | null>(null); // máx que cabem
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 84 : insets.bottom + 80;
@@ -235,9 +242,10 @@ export default function MapaScreen() {
   const factor = orientationFactor(azimuth);
   const penaltyPct = Math.round((1 - factor) * 100);
   const powerWp = parseFloat(panelPower) || 400;
-  // Número efectivo de painéis: manual tem prioridade sobre o automático
   const isManual = manualCount.trim() !== "" && parseInt(manualCount) > 0;
-  const effectivePanels = isManual ? parseInt(manualCount) : panels;
+  /* O WebView já respeitou o manualCount — panels = painéis desenhados */
+  const effectivePanels = panels; // fonte de verdade = WebView
+  const overflowWarning = isManual && capacity !== null && parseInt(manualCount) > capacity;
   const totalKwp = effectivePanels
     ? ((effectivePanels * powerWp) / 1000).toFixed(2)
     : null;
@@ -256,9 +264,10 @@ export default function MapaScreen() {
         rowSpacing: results?.gap ?? 0.5,
         colSpacing: 0.02,
         azimuth,
+        manualCount: isManual ? parseInt(manualCount) : 0,
       })
     );
-  }, [panelW, panelH, azimuth, results?.gap]);
+  }, [panelW, panelH, azimuth, results?.gap, manualCount, isManual]);
 
   useEffect(() => { pushConfig(); }, [pushConfig]);
 
@@ -267,8 +276,12 @@ export default function MapaScreen() {
     try {
       const d = JSON.parse(data);
       if (d.type === "ready") { pushConfig(); }
-      if (d.type === "roofMeasured") { setArea(d.area); setPanels(d.panelCount); }
-      if (d.type === "cleared") { setArea(null); setPanels(null); }
+      if (d.type === "roofMeasured") {
+        setArea(d.area);
+        setPanels(d.panelCount);
+        setCapacity(d.capacity ?? d.panelCount);
+      }
+      if (d.type === "cleared") { setArea(null); setPanels(null); setCapacity(null); }
     } catch (_) {}
   };
 
@@ -446,9 +459,17 @@ export default function MapaScreen() {
                 </Text>
               </View>
             </View>
+            {overflowWarning && (
+              <View style={styles.warnRow}>
+                <MaterialCommunityIcons name="alert" size={13} color="#D97706" />
+                <Text style={styles.warnTxt}>
+                  A área só comporta {capacity} painéis — foram desenhados {capacity} de {manualCount} pedidos
+                </Text>
+              </View>
+            )}
             <Text style={styles.note}>
               {isManual
-                ? `Nº manual: ${effectivePanels} painéis · Limpe o campo "Nº Painéis" para modo automático`
+                ? `Visualmente: ${effectivePanels} painéis dentro da área · Limpe "Nº Painéis" para modo auto`
                 : "✏️ Edite a forma no mapa · Orientação ideal: Sul (180°)"}
             </Text>
           </>
@@ -561,4 +582,10 @@ const styles = StyleSheet.create({
     borderRadius: 4, paddingHorizontal: 3,
   },
   manualBadgeTxt: { fontSize: 10, color: Colors.light.panel },
+  warnRow: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    backgroundColor: "#FEF3C7", borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 5, marginBottom: 4,
+  },
+  warnTxt: { flex: 1, fontSize: 10, fontFamily: "Inter_400Regular", color: "#92400E" },
 });
