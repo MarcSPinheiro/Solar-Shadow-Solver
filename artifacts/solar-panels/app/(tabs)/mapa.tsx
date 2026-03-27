@@ -70,11 +70,45 @@ html, body { height: 100%; overflow: hidden; background: #0D2B45; }
 }
 .nudge-btn:active { background: rgba(30,136,229,0.7); }
 .nudge-reset { font-size: 11px; color: #fff; }
+#compassBox {
+  position: absolute; right: 8px; bottom: 90px; z-index: 1001;
+  text-align: center; pointer-events: none;
+}
+#compassLabel {
+  background: rgba(13,43,69,0.93); color: #F5A623;
+  font-size: 9px; font-family: -apple-system,sans-serif;
+  border-radius: 5px; padding: 2px 7px; margin-top: 2px;
+  border: 1px solid rgba(245,166,35,0.45); white-space: nowrap;
+}
 </style>
 </head>
 <body>
 <div id="map"></div>
 <div id="info" class="info-bar">📐 Desenhe a área do telhado</div>
+
+<!-- ── Bússola / orientação Sul ── -->
+<div id="compassBox">
+  <svg width="58" height="58" viewBox="0 0 58 58" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="29" cy="29" r="27" fill="rgba(13,43,69,0.93)" stroke="rgba(245,166,35,0.55)" stroke-width="1.5"/>
+    <!-- ticks cardeais -->
+    <line x1="29" y1="4"  x2="29" y2="9"  stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+    <line x1="29" y1="49" x2="29" y2="54" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+    <line x1="4"  y1="29" x2="9"  y2="29" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+    <line x1="49" y1="29" x2="54" y2="29" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+    <!-- labels cardeais fixos -->
+    <text x="29" y="17" text-anchor="middle" fill="rgba(255,255,255,0.55)" font-size="8" font-family="-apple-system,sans-serif">N</text>
+    <text x="29" y="51" text-anchor="middle" fill="#F5A623" font-size="8" font-weight="bold" font-family="-apple-system,sans-serif">S</text>
+    <text x="10" y="33" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="7" font-family="-apple-system,sans-serif">O</text>
+    <text x="48" y="33" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="7" font-family="-apple-system,sans-serif">E</text>
+    <!-- seta da orientação dos painéis (roda com azimute) -->
+    <g id="compassArrow" transform="rotate(180,29,29)">
+      <polygon points="29,7 33,22 29,17 25,22" fill="#F5A623"/>
+      <line x1="29" y1="17" x2="29" y2="49" stroke="#F5A623" stroke-width="1.2" stroke-dasharray="3,3" opacity="0.5"/>
+    </g>
+    <circle cx="29" cy="29" r="2.5" fill="#F5A623"/>
+  </svg>
+  <div id="compassLabel">Sul · ideal</div>
+</div>
 
 <div class="nudge-pad" id="nudgePad" style="display:none">
   <div></div>
@@ -119,6 +153,30 @@ map.addControl(drawControl);
 
 var CFG = { panelW: 1.0, panelH: 2.0, rowSpacing: 0.5, colSpacing: 0.05, azimuth: 180, manualCount: 0, offsetX: 0, offsetY: 0 };
 var currentLayer = null;
+
+/* ── Bússola ── */
+function azLabel(az) {
+  if (az >= 337.5 || az < 22.5) return 'N';
+  if (az < 67.5) return 'NE';
+  if (az < 112.5) return 'E';
+  if (az < 157.5) return 'SE';
+  if (az < 202.5) return 'S';
+  if (az < 247.5) return 'SO';
+  if (az < 292.5) return 'O';
+  return 'NO';
+}
+
+function updateCompass() {
+  var az = CFG.azimuth;
+  var arrow = document.getElementById('compassArrow');
+  if (arrow) arrow.setAttribute('transform', 'rotate(' + az + ',29,29)');
+  var label = document.getElementById('compassLabel');
+  if (label) {
+    var dev = Math.round(Math.abs(az - 180));
+    var dir = azLabel(az);
+    label.textContent = dev === 0 ? 'Sul \u00b7 ideal' : dir + ' \u00b7 ' + dev + '\u00b0 de Sul';
+  }
+}
 
 function nudge(dx, dy, reset) {
   if (reset) { CFG.offsetX = 0; CFG.offsetY = 0; }
@@ -206,16 +264,23 @@ function onLayerChange(layer) {
     var flat = Array.isArray(latlngs[0]) ? latlngs[0] : latlngs;
     try { area = L.GeometryUtil.geodesicArea(flat); } catch(e) {}
   }
+  var nw = bounds.getNorthWest();
+  var boundsW = Math.round(nw.distanceTo(bounds.getNorthEast()));
+  var boundsH = Math.round(nw.distanceTo(bounds.getSouthWest()));
   if (!area || area < 1) {
-    var nw = bounds.getNorthWest();
-    area = nw.distanceTo(bounds.getNorthEast()) * nw.distanceTo(bounds.getSouthWest());
+    area = boundsW * boundsH;
   }
   var res = drawPanels(layer);
+  var devTxt = (function() {
+    var dev = Math.round(Math.abs(CFG.azimuth - 180));
+    var dir = azLabel(CFG.azimuth);
+    return dev === 0 ? '| Sul (ideal)' : '| ' + dir + ' \u00b7 ' + dev + '\u00b0 de Sul';
+  })();
   var label = res.drawn === res.capacity
     ? 'Painéis: ' + res.drawn
     : 'Painéis: ' + res.drawn + ' (cap. ' + res.capacity + ')';
-  document.getElementById('info').textContent = 'Área: ' + area.toFixed(0) + ' m\u00B2  |  ' + label;
-  sendRN({ type: 'roofMeasured', area: Math.round(area), panelCount: res.drawn, capacity: res.capacity });
+  document.getElementById('info').textContent = 'Área: ' + area.toFixed(0) + ' m\u00B2  |  ' + label + '  ' + devTxt;
+  sendRN({ type: 'roofMeasured', area: Math.round(area), panelCount: res.drawn, capacity: res.capacity, boundsW: boundsW, boundsH: boundsH });
 }
 
 map.on('draw:created', function(e) {
@@ -245,7 +310,7 @@ function handleMsg(e) {
       if (d.panelH > 0) CFG.panelH = d.panelH;
       if (d.rowSpacing >= 0) CFG.rowSpacing = d.rowSpacing;
       if (d.colSpacing >= 0) CFG.colSpacing = d.colSpacing;
-      if (d.azimuth !== undefined) CFG.azimuth = d.azimuth;
+      if (d.azimuth !== undefined) { CFG.azimuth = d.azimuth; updateCompass(); }
       if (d.manualCount !== undefined) CFG.manualCount = d.manualCount;
       drawnItems.eachLayer(function(l) { onLayerChange(l); });
     }
@@ -254,7 +319,7 @@ function handleMsg(e) {
 }
 document.addEventListener('message', handleMsg);
 window.addEventListener('message', handleMsg);
-setTimeout(function() { sendRN({ type: 'ready' }); }, 600);
+setTimeout(function() { updateCompass(); sendRN({ type: 'ready' }); }, 600);
 </script>
 </body>
 </html>`;
@@ -343,6 +408,8 @@ export default function MapaScreen() {
           panelW: parseFloat(panelW) || 1.13,
           panelH: parseFloat(panelH) || 2.28,
           powerWp: fPower,
+          roofBoundsW: d.boundsW ?? 0,
+          roofBoundsH: d.boundsH ?? 0,
         });
       }
       if (d.type === "cleared") { setArea(null); setPanels(null); setCapacity(null); setMapaData(null); }

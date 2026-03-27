@@ -554,9 +554,113 @@ function roiSection(params: RoiParams, results: RoiResults, hasBattery: boolean,
 // ═══════════════════════════════════════════════════════════════════════════════
 // Section: Mapa Satélite
 // ═══════════════════════════════════════════════════════════════════════════════
+/* ── Esquema SVG dos painéis fotovoltaicos ── */
+function buildPanelSchemeSvg(m: MapaData): string {
+  const W = 520, H = 250;
+  const COL_GAP = 0.05;
+  const ROW_GAP = 0.5;
+
+  /* layout em colunas/linhas */
+  let cols: number, rows: number;
+  if (m.roofBoundsW > 0 && m.roofBoundsH > 0) {
+    cols = Math.max(1, Math.floor(m.roofBoundsW / (m.panelW + COL_GAP)));
+    rows = Math.max(1, Math.floor(m.roofBoundsH / (m.panelH + ROW_GAP)));
+    if (cols * rows < m.panelCount) {
+      cols = Math.max(1, Math.round(Math.sqrt(m.panelCount * (m.panelW / m.panelH))));
+      rows = Math.ceil(m.panelCount / cols);
+    }
+  } else {
+    cols = Math.max(1, Math.round(Math.sqrt(m.panelCount * (m.panelW / m.panelH))));
+    rows = Math.ceil(m.panelCount / cols);
+  }
+
+  /* escala para caber na área de desenho */
+  const DRAW_W = W - 130 - 20;
+  const DRAW_H = H - 40;
+  const gridMetersW = cols * m.panelW + (cols - 1) * COL_GAP;
+  const gridMetersH = rows * m.panelH + (rows - 1) * ROW_GAP;
+  const scale = Math.min(DRAW_W / gridMetersW, DRAW_H / gridMetersH, 28);
+
+  const pxW = m.panelW * scale;
+  const pxH = m.panelH * scale;
+  const gapX = COL_GAP * scale;
+  const gapY = ROW_GAP * scale;
+
+  /* rectângulos dos painéis */
+  let panelSvg = "";
+  let count = 0;
+  for (let r = 0; r < rows && count < m.panelCount; r++) {
+    for (let c = 0; c < cols && count < m.panelCount; c++) {
+      const px = (c * (pxW + gapX)).toFixed(1);
+      const py = (r * (pxH + gapY)).toFixed(1);
+      panelSvg += `<rect x="${px}" y="${py}" width="${pxW.toFixed(1)}" height="${pxH.toFixed(1)}" fill="#2B6CB0" stroke="#1E88E5" stroke-width="0.8" rx="2"/>`;
+      count++;
+    }
+  }
+
+  const gridPxW = cols * (pxW + gapX) - gapX;
+  const gridPxH = rows * (pxH + gapY) - gapY;
+  const ROOF_PAD = 8;
+  const roofW = gridPxW + ROOF_PAD * 2;
+  const roofH = gridPxH + ROOF_PAD * 2;
+
+  /* centro da área de grelha */
+  const cx = (W - 120) / 2;
+  const cy = H / 2 - 8;
+  const rotDeg = m.azimuth - 180;
+
+  /* bússola */
+  const cpX = W - 55;
+  const cpY = 55;
+  const devDeg = Math.abs(rotDeg);
+  const devText = devDeg === 0 ? "Sul ideal" : `${devDeg}° de Sul`;
+
+  return `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+  <rect width="${W}" height="${H}" fill="#0D2B45" rx="8"/>
+
+  <!-- Grelha de painéis + contorno do telhado (rodados pelo azimute) -->
+  <g transform="translate(${cx},${cy}) rotate(${rotDeg})">
+    <rect x="${(-(roofW / 2)).toFixed(1)}" y="${(-(roofH / 2)).toFixed(1)}" width="${roofW.toFixed(1)}" height="${roofH.toFixed(1)}" fill="none" stroke="#8CA0B0" stroke-width="1.2" stroke-dasharray="5,3" rx="4"/>
+    <g transform="translate(${(-(gridPxW / 2)).toFixed(1)},${(-(gridPxH / 2)).toFixed(1)})">
+      ${panelSvg}
+    </g>
+  </g>
+
+  <!-- Bússola (fixa) -->
+  <circle cx="${cpX}" cy="${cpY}" r="34" fill="rgba(0,0,0,0.45)" stroke="rgba(245,166,35,0.65)" stroke-width="1.5"/>
+  <line x1="${cpX}" y1="${cpY - 30}" x2="${cpX}" y2="${cpY - 24}" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+  <line x1="${cpX}" y1="${cpY + 24}" x2="${cpX}" y2="${cpY + 30}" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+  <line x1="${cpX - 30}" y1="${cpY}" x2="${cpX - 24}" y2="${cpY}" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+  <line x1="${cpX + 24}" y1="${cpY}" x2="${cpX + 30}" y2="${cpY}" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+  <text x="${cpX}" y="${cpY - 17}" text-anchor="middle" fill="rgba(255,255,255,0.6)" font-size="9" font-family="Arial,sans-serif">N</text>
+  <text x="${cpX}" y="${cpY + 26}" text-anchor="middle" fill="#F5A623" font-size="9" font-weight="bold" font-family="Arial,sans-serif">S</text>
+  <text x="${cpX - 20}" y="${cpY + 4}" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="8" font-family="Arial,sans-serif">O</text>
+  <text x="${cpX + 21}" y="${cpY + 4}" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="8" font-family="Arial,sans-serif">E</text>
+  <!-- Seta de orientação dos painéis (roda pelo azimute) -->
+  <g transform="rotate(${m.azimuth},${cpX},${cpY})">
+    <polygon points="${cpX},${cpY - 28} ${cpX + 4},${cpY - 14} ${cpX - 4},${cpY - 14}" fill="#F5A623"/>
+    <line x1="${cpX}" y1="${cpY - 14}" x2="${cpX}" y2="${cpY + 27}" stroke="#F5A623" stroke-width="1.4" stroke-dasharray="4,3" opacity="0.55"/>
+  </g>
+  <circle cx="${cpX}" cy="${cpY}" r="3" fill="#F5A623"/>
+
+  <!-- Etiqueta orientação -->
+  <text x="${cpX}" y="${cpY + 50}" text-anchor="middle" fill="#F5A623" font-size="10" font-weight="bold" font-family="Arial,sans-serif">${m.orientationLabel}</text>
+  <text x="${cpX}" y="${cpY + 63}" text-anchor="middle" fill="rgba(245,166,35,0.75)" font-size="8" font-family="Arial,sans-serif">${devText}</text>
+
+  <!-- Legenda inferior -->
+  <text x="${cx}" y="${H - 20}" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-size="9" font-family="Arial,sans-serif">${m.panelCount} painéis · ${gridMetersW.toFixed(1)} m × ${gridMetersH.toFixed(1)} m · ${m.totalKwp.toFixed(2)} kWp total</text>
+  <text x="${cx}" y="${H - 7}" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="8" font-family="Arial,sans-serif">Área do telhado: ${m.roofArea} m²  |  Painel: ${m.panelW.toFixed(2)} × ${m.panelH.toFixed(2)} m  |  ${m.powerWp} Wp/un.</text>
+</svg>`;
+}
+
 function mapaSection(m: MapaData): string {
   const dirLabel = m.orientationLabel;
+  const devDeg = Math.abs(m.azimuth - 180);
+  const desvioTxt = devDeg === 0
+    ? "Sul — orientação óptima (0° de desvio)"
+    : `${dirLabel} — ${devDeg}° de desvio em relação a Sul`;
   const penalty = m.penaltyPct > 0 ? ` (−${m.penaltyPct}% orientação ${dirLabel})` : " (orientação óptima)";
+  const schemeSvg = buildPanelSchemeSvg(m);
   return `
 <div class="section" style="page-break-before:always">
   <div class="section-header">
@@ -567,6 +671,20 @@ function mapaSection(m: MapaData): string {
     </div>
   </div>
 
+  <!-- Esquema visual dos painéis -->
+  <div style="margin:12px 0 16px;text-align:center">
+    ${schemeSvg}
+  </div>
+
+  <!-- Caixa de orientação destacada -->
+  <div style="background:linear-gradient(135deg,#0D2B45,#1a3d5c);border:1px solid rgba(245,166,35,0.6);border-radius:8px;padding:10px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px">
+    <div style="font-size:24px">🧭</div>
+    <div>
+      <div style="color:#F5A623;font-weight:700;font-size:13px">${desvioTxt}</div>
+      <div style="color:rgba(255,255,255,0.7);font-size:11px;margin-top:2px">Azimute ${m.azimuth}° · Coeficiente de rendimento ${((1 - m.penaltyPct / 100) * 100).toFixed(0)}%</div>
+    </div>
+  </div>
+
   <table class="data-table" style="margin-bottom:14px">
     <thead>
       <tr><th colspan="2">Dimensões do Painel</th></tr>
@@ -574,7 +692,6 @@ function mapaSection(m: MapaData): string {
     <tbody>
       <tr><td class="td-key">Largura × Altura</td><td class="td-val">${m.panelW.toFixed(2)} m × ${m.panelH.toFixed(2)} m</td></tr>
       <tr><td class="td-key">Potência unitária</td><td class="td-val">${m.powerWp} Wp</td></tr>
-      <tr><td class="td-key">Orientação</td><td class="td-val">${dirLabel} (${m.azimuth}°)</td></tr>
     </tbody>
   </table>
 
@@ -598,8 +715,9 @@ function mapaSection(m: MapaData): string {
   </table>
 
   <div class="formula-box" style="margin-top:12px">
-    <strong>Nota:</strong> A potência ajustada tem em conta a penalização de rendimento devida à orientação
-    (Sul = 0%, SE/SO ≈ 4%, E/O ≈ 16%, Norte ≈ 45%). O posicionamento foi definido pelo técnico sobre imagem satélite.
+    <strong>Nota:</strong> O esquema acima representa a grelha de painéis orientada ao azimute registado no mapa satélite.
+    A potência ajustada considera a penalização de rendimento pela orientação
+    (Sul = 0%, SE/SO ≈ 4%, E/O ≈ 16%, Norte ≈ 45%).
   </div>
 </div>`;
 }
