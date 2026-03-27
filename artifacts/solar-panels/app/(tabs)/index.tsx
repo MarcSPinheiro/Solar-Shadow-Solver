@@ -28,7 +28,14 @@ export default function CalculatorScreen() {
     setLocalParams((prev) => ({ ...prev, [key]: value }));
   };
 
+  const canCalculate =
+    localParams.height.trim() !== "" &&
+    localParams.width.trim() !== "" &&
+    localParams.angle.trim() !== "" &&
+    localParams.latitude.trim() !== "";
+
   const handleCalculate = () => {
+    if (!canCalculate) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     calculate(localParams);
   };
@@ -147,12 +154,14 @@ export default function CalculatorScreen() {
 
         {/* Calculate Button */}
         <TouchableOpacity
-          style={styles.calculateButton}
+          style={[styles.calculateButton, !canCalculate && styles.calculateButtonDisabled]}
           onPress={handleCalculate}
-          activeOpacity={0.85}
+          activeOpacity={canCalculate ? 0.85 : 1}
         >
-          <MaterialCommunityIcons name="calculator" size={20} color="#fff" />
-          <Text style={styles.calculateButtonText}>Calcular Distâncias</Text>
+          <MaterialCommunityIcons name="calculator" size={20} color={canCalculate ? "#fff" : "rgba(255,255,255,0.45)"} />
+          <Text style={[styles.calculateButtonText, !canCalculate && styles.calculateButtonTextDisabled]}>
+            Calcular Distâncias
+          </Text>
         </TouchableOpacity>
 
         {/* Results */}
@@ -323,10 +332,18 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 6,
   },
+  calculateButtonDisabled: {
+    backgroundColor: Colors.light.border,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
   calculateButtonText: {
     fontSize: 16,
     fontFamily: "Inter_600SemiBold",
     color: "#fff",
+  },
+  calculateButtonTextDisabled: {
+    color: Colors.light.textSecondary,
   },
   resultsSection: {
     marginBottom: 8,

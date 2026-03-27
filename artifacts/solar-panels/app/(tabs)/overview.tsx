@@ -24,149 +24,147 @@ function ArrayLayoutDiagram() {
   const cols = parseInt(params.cols) || 5;
   const { panelWidth, panelProjectedDepth, rowSpacing, gap } = results;
 
-  // Escala para caber no ecrã
-  const maxW = 300;
+  // Escala UNIFORME para X e Y — proporções reais
+  const drawableW = 270;
   const totalW = cols * panelWidth + (cols - 1) * 0.05;
   const totalD = (rows - 1) * rowSpacing + panelProjectedDepth;
-  const scaleX = (maxW - 60) / totalW;
-  const scaleY = Math.min(scaleX, 200 / totalD);
+  const scale = Math.min(drawableW / totalW, 38); // px/m, máx 38
 
-  const panelW = panelWidth * scaleX;
-  const panelD = panelProjectedDepth * scaleY;
-  const colGap = 0.05 * scaleX;
-  const rowSpacingPx = rowSpacing * scaleY;
-  const gapPx = gap * scaleY;
+  const panelW = panelWidth * scale;
+  const panelD = panelProjectedDepth * scale;
+  const colGapPx = 0.05 * scale;
+  const rowSpacingPx = rowSpacing * scale;
+  const gapPx = gap * scale;
 
-  const offsetX = 50;
-  const offsetY = 30;
-  const totalSvgW = cols * panelW + (cols - 1) * colGap + offsetX + 40;
-  const totalSvgH = (rows - 1) * rowSpacingPx + panelD + offsetY + 70;
+  const offsetX = 46;
+  const offsetY = 28;
+  const dimRightW = 70; // espaço para cotas à direita
+
+  const svgW = offsetX + cols * panelW + (cols - 1) * colGapPx + dimRightW;
+  const svgH = offsetY + totalD * scale + 56;
+
+  const scaleBarPx = 1 * scale; // barra de escala = 1m
 
   return (
     <View style={styles.diagramBox}>
-      <Text style={styles.diagramTitle}>Vista Superior — Array Completo</Text>
+      <Text style={styles.diagramTitle}>Vista Superior — Escala Proporcional Real</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <Svg width={Math.max(totalSvgW, 300)} height={totalSvgH + 10}>
+        <Svg width={Math.max(svgW, 300)} height={svgH}>
+
+          {/* Zonas de espaço livre entre fileiras */}
+          {Array.from({ length: rows - 1 }).map((_, r) => {
+            const yGapStart = offsetY + r * rowSpacingPx + panelD;
+            return (
+              <Rect
+                key={`gap-bg-${r}`}
+                x={offsetX}
+                y={yGapStart}
+                width={cols * panelW + (cols - 1) * colGapPx}
+                height={gapPx}
+                fill="rgba(229,62,62,0.07)"
+                stroke="rgba(229,62,62,0.20)"
+                strokeWidth={0.5}
+              />
+            );
+          })}
+
           {/* Painéis */}
           {Array.from({ length: rows }).map((_, r) =>
             Array.from({ length: cols }).map((_, c) => {
-              const x = offsetX + c * (panelW + colGap);
+              const x = offsetX + c * (panelW + colGapPx);
               const y = offsetY + r * rowSpacingPx;
               return (
-                <G key={`${r}-${c}`}>
-                  <Rect
-                    x={x}
-                    y={y}
-                    width={panelW}
-                    height={panelD}
-                    fill={Colors.light.panel}
-                    opacity={0.88}
-                    rx={2}
-                  />
-                  {/* Linhas de células */}
-                  <Line x1={x + panelW / 3} y1={y} x2={x + panelW / 3} y2={y + panelD} stroke="#fff" strokeWidth={0.6} opacity={0.35} />
-                  <Line x1={x + (panelW * 2) / 3} y1={y} x2={x + (panelW * 2) / 3} y2={y + panelD} stroke="#fff" strokeWidth={0.6} opacity={0.35} />
-                  <Line x1={x} y1={y + panelD / 2} x2={x + panelW} y2={y + panelD / 2} stroke="#fff" strokeWidth={0.6} opacity={0.35} />
+                <G key={`p-${r}-${c}`}>
+                  <Rect x={x} y={y} width={panelW} height={panelD}
+                    fill={Colors.light.panel} opacity={0.90} rx={2} />
+                  <Line x1={x + panelW / 3} y1={y} x2={x + panelW / 3} y2={y + panelD}
+                    stroke="#fff" strokeWidth={0.5} opacity={0.3} />
+                  <Line x1={x + (panelW * 2) / 3} y1={y} x2={x + (panelW * 2) / 3} y2={y + panelD}
+                    stroke="#fff" strokeWidth={0.5} opacity={0.3} />
+                  <Line x1={x} y1={y + panelD / 2} x2={x + panelW} y2={y + panelD / 2}
+                    stroke="#fff" strokeWidth={0.5} opacity={0.3} />
                 </G>
               );
             })
           )}
 
-          {/* Cotas de distância início→início entre fileiras */}
+          {/* Cotas direita: início→início e espaço livre */}
           {Array.from({ length: rows - 1 }).map((_, r) => {
-            const yTop = offsetY + r * rowSpacingPx;          // início do painel r
-            const yNext = offsetY + (r + 1) * rowSpacingPx;  // início do painel r+1
-            const yGapStart = yTop + panelD;                  // fim do painel r (início do espaço livre)
-            const xLine = offsetX + cols * panelW + (cols - 1) * colGap + 14;
-
+            const yTop = offsetY + r * rowSpacingPx;
+            const yNext = offsetY + (r + 1) * rowSpacingPx;
+            const yGapStart = yTop + panelD;
+            const xD = offsetX + cols * panelW + (cols - 1) * colGapPx + 12;
+            const xG = xD + 28;
             return (
               <G key={`dim-${r}`}>
-                {/* Linha de cota início→início (verde) */}
-                <Line x1={xLine} y1={yTop} x2={xLine} y2={yNext} stroke={Colors.light.success} strokeWidth={1.5} />
-                <Line x1={xLine - 4} y1={yTop} x2={xLine + 4} y2={yTop} stroke={Colors.light.success} strokeWidth={1.5} />
-                <Line x1={xLine - 4} y1={yNext} x2={xLine + 4} y2={yNext} stroke={Colors.light.success} strokeWidth={1.5} />
-                {rowSpacingPx > 18 ? (
-                  <SvgText
-                    x={xLine + 7}
-                    y={(yTop + yNext) / 2 + 4}
-                    fontSize="8"
-                    fill={Colors.light.success}
-                    fontWeight="700"
-                  >
-                    {`${rowSpacing.toFixed(2)}m`}
+                {/* início→início (verde) */}
+                <Line x1={xD} y1={yTop} x2={xD} y2={yNext} stroke={Colors.light.success} strokeWidth={1.5} />
+                <Line x1={xD - 4} y1={yTop} x2={xD + 4} y2={yTop} stroke={Colors.light.success} strokeWidth={1.5} />
+                <Line x1={xD - 4} y1={yNext} x2={xD + 4} y2={yNext} stroke={Colors.light.success} strokeWidth={1.5} />
+                <SvgText x={xD + 7} y={(yTop + yNext) / 2 + 4} fontSize="8" fill={Colors.light.success} fontWeight="700">
+                  {`d=${rowSpacing.toFixed(2)}m`}
+                </SvgText>
+                {/* espaço livre (vermelho) */}
+                <Line x1={xG} y1={yGapStart} x2={xG} y2={yNext} stroke="#E53E3E" strokeWidth={1.2} />
+                <Line x1={xG - 3} y1={yGapStart} x2={xG + 3} y2={yGapStart} stroke="#E53E3E" strokeWidth={1.2} />
+                <Line x1={xG - 3} y1={yNext} x2={xG + 3} y2={yNext} stroke="#E53E3E" strokeWidth={1.2} />
+                {gapPx > 14 && (
+                  <SvgText x={xG + 6} y={(yGapStart + yNext) / 2 + 3} fontSize="7" fill="#E53E3E" fontWeight="600">
+                    {`${gap.toFixed(2)}m`}
                   </SvgText>
-                ) : null}
-
-                {/* Espaço livre (vermelho) dentro do gap */}
-                {gapPx > 6 ? (
-                  <G>
-                    <Line
-                      x1={xLine - 10}
-                      y1={yGapStart}
-                      x2={xLine - 10}
-                      y2={yNext}
-                      stroke="#E53E3E"
-                      strokeWidth={1}
-                    />
-                    <Line x1={xLine - 13} y1={yGapStart} x2={xLine - 7} y2={yGapStart} stroke="#E53E3E" strokeWidth={1} />
-                    <Line x1={xLine - 13} y1={yNext} x2={xLine - 7} y2={yNext} stroke="#E53E3E" strokeWidth={1} />
-                    {gapPx > 14 ? (
-                      <SvgText
-                        x={xLine - 18}
-                        y={(yGapStart + yNext) / 2 + 3}
-                        fontSize="7"
-                        fill="#E53E3E"
-                        textAnchor="middle"
-                        transform={`rotate(-90, ${xLine - 18}, ${(yGapStart + yNext) / 2 + 3})`}
-                      >
-                        {`${gap.toFixed(2)}m`}
-                      </SvgText>
-                    ) : null}
-                  </G>
-                ) : null}
+                )}
               </G>
             );
           })}
 
-          {/* Cota largura do painel */}
-          <Line x1={offsetX} y1={offsetY - 14} x2={offsetX + panelW} y2={offsetY - 14} stroke={Colors.light.accent} strokeWidth={1.5} />
-          <Line x1={offsetX} y1={offsetY - 18} x2={offsetX} y2={offsetY - 10} stroke={Colors.light.accent} strokeWidth={1.5} />
-          <Line x1={offsetX + panelW} y1={offsetY - 18} x2={offsetX + panelW} y2={offsetY - 10} stroke={Colors.light.accent} strokeWidth={1.5} />
-          <SvgText x={offsetX + panelW / 2} y={offsetY - 18} fontSize="9" fill={Colors.light.accent} textAnchor="middle" fontWeight="600">
+          {/* Cota largura painel (topo) */}
+          <Line x1={offsetX} y1={offsetY - 14} x2={offsetX + panelW} y2={offsetY - 14}
+            stroke={Colors.light.accent} strokeWidth={1} />
+          <Line x1={offsetX} y1={offsetY - 17} x2={offsetX} y2={offsetY - 11}
+            stroke={Colors.light.accent} strokeWidth={1} />
+          <Line x1={offsetX + panelW} y1={offsetY - 17} x2={offsetX + panelW} y2={offsetY - 11}
+            stroke={Colors.light.accent} strokeWidth={1} />
+          <SvgText x={offsetX + panelW / 2} y={offsetY - 17} fontSize="8"
+            fill={Colors.light.accent} textAnchor="middle" fontWeight="600">
             {`L=${panelWidth.toFixed(2)}m`}
           </SvgText>
 
-          {/* Cota profundidade do painel */}
-          <Line x1={offsetX - 16} y1={offsetY} x2={offsetX - 16} y2={offsetY + panelD} stroke={Colors.light.accent} strokeWidth={1.5} />
-          <Line x1={offsetX - 20} y1={offsetY} x2={offsetX - 12} y2={offsetY} stroke={Colors.light.accent} strokeWidth={1.5} />
-          <Line x1={offsetX - 20} y1={offsetY + panelD} x2={offsetX - 12} y2={offsetY + panelD} stroke={Colors.light.accent} strokeWidth={1.5} />
-          <SvgText
-            x={offsetX - 30}
-            y={offsetY + panelD / 2 + 4}
-            fontSize="9"
-            fill={Colors.light.accent}
-            textAnchor="middle"
-            fontWeight="600"
-            transform={`rotate(-90, ${offsetX - 30}, ${offsetY + panelD / 2 + 4})`}
-          >
+          {/* Cota prof. painel (esquerda) */}
+          <Line x1={offsetX - 14} y1={offsetY} x2={offsetX - 14} y2={offsetY + panelD}
+            stroke={Colors.light.accent} strokeWidth={1} />
+          <Line x1={offsetX - 17} y1={offsetY} x2={offsetX - 11} y2={offsetY}
+            stroke={Colors.light.accent} strokeWidth={1} />
+          <Line x1={offsetX - 17} y1={offsetY + panelD} x2={offsetX - 11} y2={offsetY + panelD}
+            stroke={Colors.light.accent} strokeWidth={1} />
+          <SvgText x={offsetX - 26} y={offsetY + panelD / 2 + 3} fontSize="8"
+            fill={Colors.light.accent} textAnchor="middle" fontWeight="600"
+            transform={`rotate(-90, ${offsetX - 26}, ${offsetY + panelD / 2 + 3})`}>
             {`${panelProjectedDepth.toFixed(2)}m`}
           </SvgText>
 
-          {/* Seta Norte */}
-          <SvgText x={totalSvgW - 20} y={28} fontSize="10" fill={Colors.light.textSecondary} textAnchor="middle" fontWeight="700">N</SvgText>
-          <Line x1={totalSvgW - 20} y1={30} x2={totalSvgW - 20} y2={46} stroke={Colors.light.textSecondary} strokeWidth={1.5} />
-          <Rect x={totalSvgW - 22} y={24} width={4} height={6} fill={Colors.light.textSecondary} />
+          {/* Seta Norte ↑ e Sul ↓ */}
+          <SvgText x={offsetX - 8} y={offsetY + 6} fontSize="8" fill={Colors.light.tabIconDefault} textAnchor="end">N↑</SvgText>
+          <SvgText x={offsetX - 8} y={offsetY + totalD * scale} fontSize="8" fill={Colors.light.tabIconDefault} textAnchor="end">S↓</SvgText>
 
-          {/* Rodapé */}
-          <SvgText
-            x={offsetX + (cols * panelW + (cols - 1) * colGap) / 2}
-            y={totalSvgH + 2}
-            fontSize="9"
-            fill={Colors.light.textSecondary}
-            textAnchor="middle"
-          >
-            {`${cols} col. × ${rows} fileiras · d=${rowSpacing.toFixed(2)}m início→início`}
-          </SvgText>
+          {/* Barra de escala */}
+          {(() => {
+            const barY = offsetY + totalD * scale + 22;
+            const barX = offsetX;
+            return (
+              <G>
+                <Line x1={barX} y1={barY} x2={barX + scaleBarPx} y2={barY}
+                  stroke={Colors.light.text} strokeWidth={2} />
+                <Line x1={barX} y1={barY - 5} x2={barX} y2={barY + 5}
+                  stroke={Colors.light.text} strokeWidth={2} />
+                <Line x1={barX + scaleBarPx} y1={barY - 5} x2={barX + scaleBarPx} y2={barY + 5}
+                  stroke={Colors.light.text} strokeWidth={2} />
+                <SvgText x={barX + scaleBarPx / 2} y={barY - 7} fontSize="8"
+                  fill={Colors.light.text} textAnchor="middle" fontWeight="700">
+                  1 metro
+                </SvgText>
+              </G>
+            );
+          })()}
         </Svg>
       </ScrollView>
 
@@ -177,7 +175,7 @@ function ArrayLayoutDiagram() {
         </View>
         <View style={styles.legendItem}>
           <View style={[styles.legendColor, { backgroundColor: Colors.light.success }]} />
-          <Text style={styles.legendText}>Dist. início→início</Text>
+          <Text style={styles.legendText}>d = início→início</Text>
         </View>
         <View style={styles.legendItem}>
           <View style={[styles.legendColor, { backgroundColor: "#E53E3E" }]} />

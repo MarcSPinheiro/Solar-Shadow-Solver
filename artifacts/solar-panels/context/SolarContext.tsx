@@ -96,17 +96,17 @@ function computeSolar(params: SolarParams): SolarResults {
 }
 
 const defaultParams: SolarParams = {
-  height: "1.65",
-  width: "1.0",
-  angle: "20",
-  latitude: "38.7",
-  rows: "4",
-  cols: "5",
+  height: "",
+  width: "",
+  angle: "",
+  latitude: "",
+  rows: "",
+  cols: "",
 };
 
 export function SolarProvider({ children }: { children: ReactNode }) {
   const [params, setParamsState] = useState<SolarParams>(defaultParams);
-  const [results, setResults] = useState<SolarResults | null>(computeSolar(defaultParams));
+  const [results, setResults] = useState<SolarResults | null>(null);
 
   const setParams = (p: SolarParams) => {
     setParamsState(p);
