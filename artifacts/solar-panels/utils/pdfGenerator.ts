@@ -716,8 +716,8 @@ function mapaSection(m: MapaData): string {
 
   <div class="formula-box" style="margin-top:12px">
     <strong>Nota:</strong> O esquema acima representa a grelha de painéis orientada ao azimute registado no mapa satélite.
-    A potência ajustada considera a penalização de rendimento pela orientação
-    (Sul = 0%, SE/SO ≈ 4%, E/O ≈ 16%, Norte ≈ 45%).
+    A potência ajustada considera a penalização de rendimento pela orientação, baseada em dados PVGIS para Portugal (~39°N):
+    Sul = 0% · SE/SO ≈ 5% · E/O ≈ 20% · NE/NO ≈ 37% · Norte ≈ 44%.
   </div>
 </div>`;
 }

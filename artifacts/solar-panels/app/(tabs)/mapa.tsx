@@ -28,11 +28,28 @@ function azLabel(az: number): string {
   return "NO";
 }
 
-/** Fator de orientação baseado em dados PVGIS para Portugal (~39°N, inclinação ~35°).
- *  Sul (180°) = 1.0 | Este/Oeste = ~0.84 | Norte = ~0.55  */
+/**
+ * Fator de orientação baseado em dados PVGIS para Portugal (~39°N, inclinação ~30°).
+ * Interpolação linear entre pontos de referência PVGIS Lisboa:
+ *   Sul (0° desvio) = 100%  |  SE/SO (45°) = 95%
+ *   E/O  (90°)      =  80%  |  NE/NO (135°) = 63%
+ *   Norte (180°)    =  56%
+ */
 function orientationFactor(az: number): number {
   const dev = Math.min(Math.abs(az - 180), 360 - Math.abs(az - 180));
-  return Math.max(0.5, 1 - 0.0003 * dev - 0.0000125 * dev * dev);
+  const pts: [number, number][] = [
+    [0, 1.00],
+    [45, 0.95],
+    [90, 0.80],
+    [135, 0.63],
+    [180, 0.56],
+  ];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [d0, f0] = pts[i];
+    const [d1, f1] = pts[i + 1];
+    if (dev <= d1) return f0 + (f1 - f0) * ((dev - d0) / (d1 - d0));
+  }
+  return 0.56;
 }
 
 /* ─── HTML do mapa Leaflet (com rotação de painéis) ────────────── */
@@ -586,7 +603,7 @@ export default function MapaScreen() {
               <View style={[styles.card, { borderColor: Colors.light.success + "80", borderWidth: 1.5 }]}>
                 <Text style={[styles.cardVal, { color: Colors.light.success }]}>{adjKwp} kWp</Text>
                 <Text style={styles.cardLbl}>
-                  Ajustada{"\n"}({dirLabel}, -{penaltyPct}%)
+                  Ajustada{"\n"}({dirLabel}{penaltyPct > 0 ? `, -${penaltyPct}%` : ", ideal"})
                 </Text>
               </View>
             </View>
