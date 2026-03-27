@@ -68,6 +68,8 @@ interface RoiParams {
   numPanels: string;
   inclination: string;
   inverterPower: string;
+  annualConsumption: string;
+  batteryCapacity: string;
   electricityPrice: string;
   feedInTariff: string;
 }
@@ -78,11 +80,50 @@ interface RoiResults {
   monthlyKwh: number[];
   annualSavingsEur: number;
   selfKwh: number;
+  selfRate: number;
   exportKwh: number;
+  consumptionCoveredPct: number | null;
   paybackYears: number;
   netAfter20: number;
   netAfter25: number;
   cumulativeNet: number[];
+}
+
+// ─── Self-consumption model ───────────────────────────────────────────────────
+// Direct self-consumption: fraction produced while load is simultaneously active.
+// For Portugal residential, ~42% of generation coincides with real-time consumption.
+// Battery stores excess solar and discharges to cover evening/night load.
+function calcSelfConsumption(
+  productionKwh: number,
+  consumptionKwh: number,
+  hasBattery: boolean,
+  batteryCapacityKwh: number
+): { selfKwh: number; selfRate: number } {
+  if (productionKwh <= 0) return { selfKwh: 0, selfRate: 0 };
+
+  // No consumption data → fall back to fixed industry estimates
+  if (consumptionKwh <= 0) {
+    const r = hasBattery
+      ? Math.min(0.85, 0.30 + (batteryCapacityKwh * 365 * 0.9) / Math.max(1, productionKwh))
+      : 0.30;
+    return { selfKwh: productionKwh * r, selfRate: r };
+  }
+
+  // Direct match (load vs generation simultaneity ~42% of generation window)
+  const directKwh = Math.min(productionKwh * 0.42, consumptionKwh);
+
+  if (!hasBattery || batteryCapacityKwh <= 0) {
+    return { selfKwh: directKwh, selfRate: directKwh / productionKwh };
+  }
+
+  // Battery: 1 cycle/day, 90% round-trip efficiency
+  const batteryThroughputYear = batteryCapacityKwh * 365 * 0.90;
+  const excessAfterDirect = Math.max(0, productionKwh - directKwh);
+  const unmetLoad = Math.max(0, consumptionKwh - directKwh);
+  const batteryKwh = Math.min(batteryThroughputYear, excessAfterDirect, unmetLoad);
+
+  const selfKwh = directKwh + batteryKwh;
+  return { selfKwh, selfRate: Math.min(1, selfKwh / productionKwh) };
 }
 
 // ─── Core computation ─────────────────────────────────────────────────────────
@@ -97,6 +138,8 @@ function computeRoi(
   const inclDeg = parseFloat(params.inclination) || 30;
   const price = parseFloat(params.electricityPrice) || 0.22;
   const feedIn = parseFloat(params.feedInTariff) || 0.05;
+  const consumptionKwh = parseFloat(params.annualConsumption) || 0;
+  const batteryCapKwh = parseFloat(params.batteryCapacity) || 0;
 
   if (!cost || !panelW || !n || cost <= 0 || panelW <= 0 || n <= 0) return null;
 
@@ -108,14 +151,21 @@ function computeRoi(
   const baseYield = 1550; // kWh/kWp/year — Portugal south-facing optimal
   const annualProductionKwh = totalPowerKwp * baseYield * orientFactor * inclFactor;
 
-  const selfRate = hasBattery ? 0.75 : 0.30;
-  const selfKwh = annualProductionKwh * selfRate;
-  const exportKwh = annualProductionKwh * (1 - selfRate);
+  const { selfKwh, selfRate } = calcSelfConsumption(
+    annualProductionKwh,
+    consumptionKwh,
+    hasBattery,
+    batteryCapKwh
+  );
+  const exportKwh = annualProductionKwh - selfKwh;
 
   const annualSavingsEur = selfKwh * price + exportKwh * feedIn;
   const monthlyKwh = MONTHLY_FACTORS.map((f) => annualProductionKwh * f);
 
   const paybackYears = annualSavingsEur > 0 ? cost / annualSavingsEur : Infinity;
+
+  const consumptionCoveredPct =
+    consumptionKwh > 0 ? Math.min(100, (selfKwh / consumptionKwh) * 100) : null;
 
   // 25-year projection: 0.5% annual panel degradation, 3% electricity price rise/year
   const cumulativeNet: number[] = [];
@@ -133,7 +183,9 @@ function computeRoi(
     monthlyKwh,
     annualSavingsEur,
     selfKwh,
+    selfRate,
     exportKwh,
+    consumptionCoveredPct,
     paybackYears,
     netAfter20: cumulativeNet[19],
     netAfter25: cumulativeNet[24],
@@ -371,6 +423,8 @@ export default function RoiScreen() {
     numPanels: "",
     inclination: "",
     inverterPower: "",
+    annualConsumption: "",
+    batteryCapacity: "",
     electricityPrice: "0.22",
     feedInTariff: "0.05",
   });
@@ -389,6 +443,18 @@ export default function RoiScreen() {
     params.panelPower.trim() !== "" &&
     params.numPanels.trim() !== "" &&
     params.inclination.trim() !== "";
+
+  // Live self-consumption preview (before pressing Calculate)
+  const selfRatePreview = useMemo(() => {
+    const prod = parseFloat(params.panelPower) && parseFloat(params.numPanels)
+      ? ((parseFloat(params.panelPower) * parseFloat(params.numPanels)) / 1000) * 1550
+      : 0;
+    const cons = parseFloat(params.annualConsumption) || 0;
+    const cap = parseFloat(params.batteryCapacity) || 0;
+    if (prod <= 0) return null;
+    const { selfRate } = calcSelfConsumption(prod, cons, hasBattery, cap);
+    return selfRate;
+  }, [params.panelPower, params.numPanels, params.annualConsumption, params.batteryCapacity, hasBattery]);
 
   const results = useMemo(() => {
     if (!calculated) return null;
@@ -526,20 +592,42 @@ export default function RoiScreen() {
           />
         </View>
 
+        {/* ── Consumo ───────────────────────────────────────────────── */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="home-lightning-bolt-outline" size={16} color={Colors.light.accent} />
+            <Text style={styles.sectionTitle}>Consumo Elétrico</Text>
+          </View>
+
+          <InputField
+            label="Consumo Anual (ano anterior)"
+            unit="kWh"
+            hint="da fatura de energia"
+            value={params.annualConsumption}
+            onChangeText={(v) => handleChange("annualConsumption", v)}
+            placeholder="ex: 4200"
+          />
+          <Text style={styles.fieldHint}>
+            Consulte a sua fatura anual de eletricidade. Usado para calcular o autoconsumo real com base no seu perfil de carga.
+          </Text>
+        </View>
+
         {/* ── Baterias ──────────────────────────────────────────────── */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialCommunityIcons name="battery-charging" size={16} color={Colors.light.accent} />
-            <Text style={styles.sectionTitle}>Armazenamento</Text>
+            <Text style={styles.sectionTitle}>Armazenamento em Baterias</Text>
           </View>
 
           <View style={styles.switchRow}>
             <View style={styles.switchLeft}>
-              <Text style={styles.switchLabel}>Inclui baterias</Text>
+              <Text style={styles.switchLabel}>Inclui banco de baterias</Text>
               <Text style={styles.switchSub}>
-                {hasBattery
-                  ? "Autoconsumo estimado: ~75%"
-                  : "Autoconsumo estimado: ~30%"}
+                {selfRatePreview !== null
+                  ? `Autoconsumo calculado: ~${Math.round(selfRatePreview * 100)}%`
+                  : hasBattery
+                    ? "Preencha potência e nº de painéis para estimar"
+                    : "Sem baterias: autoconsumo direto ~30-42%"}
               </Text>
             </View>
             <Switch
@@ -552,6 +640,22 @@ export default function RoiScreen() {
               thumbColor={hasBattery ? Colors.light.card : Colors.light.backgroundSecondary}
             />
           </View>
+
+          {hasBattery && (
+            <View style={styles.batteryCapBox}>
+              <InputField
+                label="Capacidade do Banco de Baterias"
+                unit="kWh"
+                hint="capacidade útil total"
+                value={params.batteryCapacity}
+                onChangeText={(v) => handleChange("batteryCapacity", v)}
+                placeholder="ex: 10"
+              />
+              <Text style={styles.fieldHint}>
+                Ex.: 2 baterias de 5 kWh = 10 kWh. Afeta diretamente a taxa de autoconsumo calculada.
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* ── Preços de energia ─────────────────────────────────────── */}
@@ -637,16 +741,33 @@ export default function RoiScreen() {
                   value={fmt(results.selfKwh)}
                   unit="kWh/ano"
                   color={Colors.light.success}
-                  sub={`${Math.round((results.selfKwh / results.annualProductionKwh) * 100)}% da produção`}
+                  sub={`${Math.round(results.selfRate * 100)}% da produção solar`}
                 />
                 <ResultCard
                   icon={<MaterialCommunityIcons name="transmission-tower" size={18} color={Colors.light.tabIconDefault} />}
                   label="Injeção Rede"
                   value={fmt(results.exportKwh)}
                   unit="kWh/ano"
-                  sub="energia exportada"
+                  sub={`${Math.round((1 - results.selfRate) * 100)}% da produção`}
                 />
               </View>
+
+              {results.consumptionCoveredPct !== null && (
+                <View style={styles.consumptionCoverCard}>
+                  <View style={styles.consumptionCoverLeft}>
+                    <MaterialCommunityIcons name="shield-check" size={20} color={Colors.light.success} />
+                    <View>
+                      <Text style={styles.coverLabel}>Consumo coberto pelo solar</Text>
+                      <Text style={styles.coverSub}>
+                        {fmt(results.selfKwh)} kWh de {fmt(parseFloat(params.annualConsumption))} kWh consumidos/ano
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.coverPct, { color: results.consumptionCoveredPct >= 80 ? Colors.light.success : results.consumptionCoveredPct >= 50 ? Colors.light.primary : Colors.light.accent }]}>
+                    {Math.round(results.consumptionCoveredPct)}%
+                  </Text>
+                </View>
+              )}
 
               <View style={styles.savingsBanner}>
                 <View>
@@ -906,6 +1027,49 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Inter_400Regular",
     color: Colors.light.textSecondary,
+  },
+  batteryCapBox: {
+    marginTop: 14,
+  },
+  fieldHint: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: Colors.light.tabIconDefault,
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  consumptionCoverCard: {
+    backgroundColor: Colors.light.backgroundSecondary,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  consumptionCoverLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+  coverLabel: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: Colors.light.text,
+    marginBottom: 2,
+  },
+  coverSub: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: Colors.light.textSecondary,
+  },
+  coverPct: {
+    fontSize: 28,
+    fontFamily: "Inter_700Bold",
+    marginLeft: 8,
   },
   calcButton: {
     backgroundColor: Colors.light.secondary,
