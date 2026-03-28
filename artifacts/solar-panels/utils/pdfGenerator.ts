@@ -660,7 +660,8 @@ function mapaSection(m: MapaData): string {
     ? "Sul — orientação óptima (0° de desvio)"
     : `${dirLabel} — ${devDeg}° de desvio em relação a Sul`;
   const penalty = m.penaltyPct > 0 ? ` (−${m.penaltyPct}% orientação ${dirLabel})` : " (orientação óptima)";
-  const schemeSvg = buildPanelSchemeSvg(m);
+  /* Usa SVG capturado do mapa (disposição real); fallback para SVG calculado */
+  const schemeSvg = m.panelSvg && m.panelSvg.length > 10 ? m.panelSvg : buildPanelSchemeSvg(m);
   return `
 <div class="section" style="page-break-before:always">
   <div class="section-header">
@@ -671,8 +672,8 @@ function mapaSection(m: MapaData): string {
     </div>
   </div>
 
-  <!-- Esquema visual dos painéis -->
-  <div style="margin:12px 0 16px;text-align:center">
+  <!-- Esquema visual dos painéis (disposição real do mapa) -->
+  <div style="margin:12px 0 16px;text-align:center;background:#0D2B45;border-radius:8px;padding:4px">
     ${schemeSvg}
   </div>
 
@@ -812,9 +813,9 @@ function buildHtml(
   ${client.notes ? `<div><div class="client-label">Notas</div><div class="client-sub">${client.notes}</div></div>` : ""}
 </div>
 
+${hasMapa ? mapaSection(mapaData!) : ""}
 ${hasSpacing ? spacingSection(solarParams!, solarResults!) : ""}
 ${hasRoi ? roiSection(roiParams!, roiResults!, roiHasBattery, roiOrientation) : ""}
-${hasMapa ? mapaSection(mapaData!) : ""}
 
 <div class="footer">
   <span>${COMPANY.name} · NIF ${COMPANY.nif}</span>

@@ -14,6 +14,7 @@ export interface MapaData {
   powerWp: number;
   roofBoundsW: number;
   roofBoundsH: number;
+  panelSvg: string;
 }
 
 interface MapaContextType {

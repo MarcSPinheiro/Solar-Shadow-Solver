@@ -208,6 +208,87 @@ function sendRN(obj) {
   }
 }
 
+/* ── Gera SVG da disposição real dos painéis (coordenadas lat/lng → SVG) ── */
+function capturePanelSvg() {
+  var panels = [];
+  panelLayer.eachLayer(function(layer) {
+    if (!layer.getLatLngs) return;
+    var ll = layer.getLatLngs();
+    var ring = Array.isArray(ll[0]) ? ll[0] : ll;
+    panels.push(ring.map(function(p) { return [p.lat, p.lng]; }));
+  });
+  if (panels.length === 0) return '';
+
+  var roofRing = [];
+  drawnItems.eachLayer(function(layer) {
+    if (!layer.getLatLngs) return;
+    var ll = layer.getLatLngs();
+    roofRing = (Array.isArray(ll[0]) ? ll[0] : ll).map(function(p) { return [p.lat, p.lng]; });
+  });
+
+  /* caixa delimitadora de todos os pontos */
+  var allLats = [], allLngs = [];
+  panels.forEach(function(p) { p.forEach(function(pt) { allLats.push(pt[0]); allLngs.push(pt[1]); }); });
+  roofRing.forEach(function(pt) { allLats.push(pt[0]); allLngs.push(pt[1]); });
+  var minLat = Math.min.apply(null, allLats), maxLat = Math.max.apply(null, allLats);
+  var minLng = Math.min.apply(null, allLngs), maxLng = Math.max.apply(null, allLngs);
+  var latR = (maxLat - minLat) || 1e-5;
+  var lngR = (maxLng - minLng) || 1e-5;
+  var midLat = (minLat + maxLat) / 2;
+  var lngScale = Math.cos(midLat * Math.PI / 180); /* correcção Mercator */
+
+  var W = 500, H = 220, PAD = 20;
+  var geoW = lngR * lngScale, geoH = latR;
+  var sc = Math.min((W - 2*PAD) / geoW, (H - 2*PAD) / geoH);
+  var ox = (W - geoW * sc) / 2, oy = (H - geoH * sc) / 2;
+  function sx(lng) { return (ox + (lng - minLng) * lngScale * sc).toFixed(2); }
+  function sy(lat) { return (oy + (maxLat - lat) * sc).toFixed(2); } /* Y invertido: Norte=cima */
+
+  /* contorno do telhado */
+  var roofSvg = '';
+  if (roofRing.length > 0) {
+    var rPts = roofRing.map(function(pt) { return sx(pt[1]) + ',' + sy(pt[0]); }).join(' ');
+    roofSvg = '<polygon points="' + rPts + '" fill="rgba(100,140,180,0.15)" stroke="#8CA0B0" stroke-width="1.2" stroke-dasharray="4,2"/>';
+  }
+
+  /* painéis */
+  var panelsSvg = panels.map(function(p) {
+    var pts = p.map(function(pt) { return sx(pt[1]) + ',' + sy(pt[0]); }).join(' ');
+    return '<polygon points="' + pts + '" fill="#2B6CB0" stroke="#1E88E5" stroke-width="0.5"/>';
+  }).join('');
+
+  /* bússola no canto inferior-direito */
+  var cpX = W - 28, cpY = H - 28, cr = 18;
+  var a = CFG.azimuth * Math.PI / 180;
+  var tipX = (cpX + Math.sin(a) * (cr - 3)).toFixed(1);
+  var tipY = (cpY - Math.cos(a) * (cr - 3)).toFixed(1);
+  var wa = 0.45, wb = 7;
+  var b1x = (cpX + Math.sin(a + Math.PI - wa) * wb).toFixed(1);
+  var b1y = (cpY - Math.cos(a + Math.PI - wa) * wb).toFixed(1);
+  var b2x = (cpX + Math.sin(a + Math.PI + wa) * wb).toFixed(1);
+  var b2y = (cpY - Math.cos(a + Math.PI + wa) * wb).toFixed(1);
+  var devNum = Math.round(Math.abs(CFG.azimuth - 180));
+  var devStr = devNum === 0 ? 'Sul' : azLabel(CFG.azimuth) + ' ' + devNum + '\u00b0';
+  var compassSvg =
+    '<circle cx="' + cpX + '" cy="' + cpY + '" r="' + cr + '" fill="rgba(13,43,69,0.93)" stroke="rgba(245,166,35,0.5)" stroke-width="1.2"/>'
+    + '<text x="' + cpX + '" y="' + (cpY - cr + 9) + '" text-anchor="middle" fill="rgba(255,255,255,0.55)" font-size="7" font-family="Arial,sans-serif">N</text>'
+    + '<text x="' + cpX + '" y="' + (cpY + cr - 2) + '" text-anchor="middle" fill="#F5A623" font-size="7" font-weight="bold" font-family="Arial,sans-serif">S</text>'
+    + '<text x="' + (cpX - cr + 5) + '" y="' + (cpY + 3) + '" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="6" font-family="Arial,sans-serif">O</text>'
+    + '<text x="' + (cpX + cr - 5) + '" y="' + (cpY + 3) + '" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="6" font-family="Arial,sans-serif">E</text>'
+    + '<polygon points="' + tipX + ',' + tipY + ' ' + b1x + ',' + b1y + ' ' + b2x + ',' + b2y + '" fill="#F5A623"/>'
+    + '<circle cx="' + cpX + '" cy="' + cpY + '" r="2" fill="#F5A623"/>';
+
+  /* etiqueta de orientação */
+  var labelSvg = '<text x="' + (W/2) + '" y="' + (H - 5) + '" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-size="8" font-family="Arial,sans-serif">'
+    + panels.length + ' pain\u00e9is \u00b7 ' + devStr + '\u00b7 ' + CFG.panelW.toFixed(2) + '\u00d7' + CFG.panelH.toFixed(2) + ' m'
+    + '</text>';
+
+  return '<svg width="' + W + '" height="' + H + '" xmlns="http://www.w3.org/2000/svg">'
+    + '<rect width="' + W + '" height="' + H + '" fill="#0D2B45" rx="6"/>'
+    + roofSvg + panelsSvg + compassSvg + labelSvg
+    + '</svg>';
+}
+
 /* ── Geometria ── */
 function rotXY(x, y, deg) {
   var r = deg * Math.PI / 180;
@@ -297,7 +378,8 @@ function onLayerChange(layer) {
     ? 'Painéis: ' + res.drawn
     : 'Painéis: ' + res.drawn + ' (cap. ' + res.capacity + ')';
   document.getElementById('info').textContent = 'Área: ' + area.toFixed(0) + ' m\u00B2  |  ' + label + '  ' + devTxt;
-  sendRN({ type: 'roofMeasured', area: Math.round(area), panelCount: res.drawn, capacity: res.capacity, boundsW: boundsW, boundsH: boundsH });
+  var svg = capturePanelSvg();
+  sendRN({ type: 'roofMeasured', area: Math.round(area), panelCount: res.drawn, capacity: res.capacity, boundsW: boundsW, boundsH: boundsH, panelSvg: svg });
 }
 
 map.on('draw:created', function(e) {
@@ -427,6 +509,7 @@ export default function MapaScreen() {
           powerWp: fPower,
           roofBoundsW: d.boundsW ?? 0,
           roofBoundsH: d.boundsH ?? 0,
+          panelSvg: d.panelSvg ?? "",
         });
       }
       if (d.type === "cleared") { setArea(null); setPanels(null); setCapacity(null); setMapaData(null); }

@@ -106,9 +106,9 @@ export default function ReportScreen() {
 
       {/* Data status */}
       <Section icon="database-check-outline" title="Dados incluídos no relatório">
+        <StatusBadge hasData={hasMapa} label="Projeção no telhado (Mapa)" tab="Mapa" />
         <StatusBadge hasData={hasSpacing} label="Estudo de dimensionamento" tab="Calcular" />
         <StatusBadge hasData={hasRoi} label="Análise de retorno (ROI)" tab="Retorno" />
-        <StatusBadge hasData={hasMapa} label="Projeção no telhado (Mapa)" tab="Mapa" />
         <View style={styles.infoBox}>
           <Feather name="info" size={14} color="#4A6072" />
           <Text style={styles.infoText}>
