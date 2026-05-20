@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useMemo } from "react";
+import React, { createContext, useContext, useState } from "react";
+import { usePanelCtx } from "@/contexts/PanelContext";
 
 export interface RoiParams {
   investmentCost: string;
@@ -36,20 +37,6 @@ interface RoiContextType {
   calculate: () => void;
 }
 
-const defaultParams: RoiParams = {
-  investmentCost: "",
-  panelPower: "400",
-  numPanels: "10",
-  inclination: "30",
-  inverterPower: "",
-  annualConsumption: "",
-  batteryCapacity: "",
-  hasBattery: false,
-  electricityPrice: "0.22",
-  feedInTariff: "0.05",
-  orientation: "S",
-};
-
 const ORIENTATIONS = [
   { label: "S", factor: 1.00 },
   { label: "SW", factor: 0.95 },
@@ -63,17 +50,15 @@ const ORIENTATIONS = [
 
 function getInclinationFactor(deg: number): number {
   const table = [
-    [0, 0.78], [10, 0.88], [20, 0.95], [30, 0.99], [35, 1.00], 
-    [40, 0.99], [45, 0.97], [60, 0.89], [75, 0.78], [90, 0.65]
+    [0, 0.78], [10, 0.88], [20, 0.95], [30, 0.99], [35, 1.00],
+    [40, 0.99], [45, 0.97], [60, 0.89], [75, 0.78], [90, 0.65],
   ];
   if (deg <= 0) return 0.78;
   if (deg >= 90) return 0.65;
   for (let i = 0; i < table.length - 1; i++) {
     const [d0, f0] = table[i];
     const [d1, f1] = table[i + 1];
-    if (deg >= d0 && deg <= d1) {
-      return f0 + (f1 - f0) * ((deg - d0) / (d1 - d0));
-    }
+    if (deg >= d0 && deg <= d1) return f0 + (f1 - f0) * ((deg - d0) / (d1 - d0));
   }
   return 1.0;
 }
@@ -107,31 +92,31 @@ function computeRoi(params: RoiParams): RoiResult | null {
   const feedIn = parseFloat(params.feedInTariff) || 0.05;
   const consKwh = parseFloat(params.annualConsumption) || 0;
   const battCap = parseFloat(params.batteryCapacity) || 0;
-  
+
   if (!cost || !panelW || !n || cost <= 0 || panelW <= 0 || n <= 0) return null;
-  
+
   const orientFactor = ORIENTATIONS.find(o => o.label === params.orientation)?.factor ?? 1.0;
   const inclFactor = getInclinationFactor(inclDeg);
-  
+
   const totalPowerKwp = (panelW * n) / 1000;
   const annualProductionKwh = totalPowerKwp * 1550 * orientFactor * inclFactor;
-  
+
   const { selfKwh, selfRate } = calcSelfConsumption(annualProductionKwh, consKwh, params.hasBattery, battCap);
   const exportKwh = Math.max(0, annualProductionKwh - selfKwh);
-  
+
   const annualSavingsEur = (selfKwh * price) + (exportKwh * feedIn);
   const monthlyKwh = MONTHLY_FACTORS.map(f => annualProductionKwh * f);
-  
+
   const paybackYears = annualSavingsEur > 0 ? cost / annualSavingsEur : Infinity;
   const consumptionCoveredPct = consKwh > 0 ? Math.min(100, (selfKwh / consKwh) * 100) : null;
-  
-  const cumulativeNet = [];
+
+  const cumulativeNet: number[] = [];
   let cum = 0;
   for (let y = 1; y <= 25; y++) {
     cum += annualSavingsEur * Math.pow(0.995, y - 1) * Math.pow(1.03, y - 1);
     cumulativeNet.push(cum - cost);
   }
-  
+
   return {
     totalPowerKwp,
     annualProductionKwh,
@@ -151,12 +136,53 @@ function computeRoi(params: RoiParams): RoiResult | null {
 const RoiContext = createContext<RoiContextType | undefined>(undefined);
 
 export function RoiProvider({ children }: { children: React.ReactNode }) {
-  const [params, setParams] = useState<RoiParams>(defaultParams);
+  const { panel, setPanel } = usePanelCtx();
+  const [localParams, setLocalParams] = useState({
+    investmentCost: "",
+    numPanels: "10",
+    inverterPower: "",
+    annualConsumption: "",
+    batteryCapacity: "",
+    hasBattery: false,
+    electricityPrice: "0.22",
+    feedInTariff: "0.05",
+  });
   const [results, setResults] = useState<RoiResult | null>(null);
 
-  const calculate = () => {
-    setResults(computeRoi(params));
+  const params: RoiParams = {
+    panelPower: panel.panelPower,
+    inclination: panel.inclination,
+    orientation: panel.orientation,
+    ...localParams,
   };
+
+  const setParams: React.Dispatch<React.SetStateAction<RoiParams>> = (updater) => {
+    const current: RoiParams = {
+      panelPower: panel.panelPower,
+      inclination: panel.inclination,
+      orientation: panel.orientation,
+      ...localParams,
+    };
+    const next = typeof updater === "function" ? updater(current) : updater;
+    setPanel(p => ({
+      ...p,
+      panelPower: next.panelPower,
+      inclination: next.inclination,
+      orientation: next.orientation,
+    }));
+    setLocalParams({
+      investmentCost: next.investmentCost,
+      numPanels: next.numPanels,
+      inverterPower: next.inverterPower,
+      annualConsumption: next.annualConsumption,
+      batteryCapacity: next.batteryCapacity,
+      hasBattery: next.hasBattery,
+      electricityPrice: next.electricityPrice,
+      feedInTariff: next.feedInTariff,
+    });
+  };
+
+  const calculate = () => setResults(computeRoi(params));
 
   return (
     <RoiContext.Provider value={{ params, setParams, results, calculate }}>

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useMemo } from "react";
+import { usePanelCtx } from "@/contexts/PanelContext";
 
 export interface SolarParams {
   height: string;
@@ -29,15 +30,6 @@ interface SolarContextType {
   results: SolarResult;
 }
 
-const defaultParams: SolarParams = {
-  height: "2.28",
-  width: "1.13",
-  angle: "30",
-  latitude: "38.7",
-  rows: "4",
-  cols: "5",
-};
-
 const SolarContext = createContext<SolarContextType | undefined>(undefined);
 
 function computeSolar(params: SolarParams): SolarResult {
@@ -47,23 +39,23 @@ function computeSolar(params: SolarParams): SolarResult {
   const lat = parseFloat(params.latitude) || 38.7;
   const rows = parseInt(params.rows) || 4;
   const cols = parseInt(params.cols) || 5;
-  
+
   const toRad = (deg: number) => deg * Math.PI / 180;
   const dec = lat >= 0 ? -23.45 : 23.45;
   const altDeg = 90 - Math.abs(lat) + dec;
   const altRad = toRad(Math.max(altDeg, 1));
-  
+
   const panelProjectedDepth = h * Math.cos(toRad(beta));
   const panelProjectedHeight = h * Math.sin(toRad(beta));
   const shadowFromTop = panelProjectedHeight / Math.tan(altRad);
   const shadowLength = panelProjectedDepth + shadowFromTop;
-  
+
   const gap = shadowFromTop;
   const rowSpacing = panelProjectedDepth + gap;
-  
+
   const totalWidth = cols * w + (cols - 1) * 0.05;
   const totalLength = panelProjectedDepth + (rows - 1) * rowSpacing;
-  
+
   return {
     gap,
     rowSpacing,
@@ -75,13 +67,42 @@ function computeSolar(params: SolarParams): SolarResult {
     panelHeight: h,
     panelWidth: w,
     panelAngle: beta,
-    panelProjectedDepth
+    panelProjectedDepth,
   };
 }
 
 export function SolarProvider({ children }: { children: React.ReactNode }) {
-  const [params, setParams] = useState<SolarParams>(defaultParams);
-  const results = useMemo(() => computeSolar(params), [params]);
+  const { panel, setPanel } = usePanelCtx();
+  const [localParams, setLocalParams] = useState({ latitude: "38.7", rows: "4", cols: "5" });
+
+  const params: SolarParams = {
+    height: panel.panelHeight,
+    width: panel.panelWidth,
+    angle: panel.inclination,
+    ...localParams,
+  };
+
+  const setParams: React.Dispatch<React.SetStateAction<SolarParams>> = (updater) => {
+    const current: SolarParams = {
+      height: panel.panelHeight,
+      width: panel.panelWidth,
+      angle: panel.inclination,
+      ...localParams,
+    };
+    const next = typeof updater === "function" ? updater(current) : updater;
+    setPanel(p => ({
+      ...p,
+      panelHeight: next.height,
+      panelWidth: next.width,
+      inclination: next.angle,
+    }));
+    setLocalParams({ latitude: next.latitude, rows: next.rows, cols: next.cols });
+  };
+
+  const results = useMemo(
+    () => computeSolar(params),
+    [panel.panelHeight, panel.panelWidth, panel.inclination, localParams.latitude, localParams.rows, localParams.cols]
+  );
 
   return (
     <SolarContext.Provider value={{ params, setParams, results }}>

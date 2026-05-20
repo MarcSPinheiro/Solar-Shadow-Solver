@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMapa } from "@/contexts/MapaContext";
+import { usePanelCtx } from "@/contexts/PanelContext";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
@@ -310,15 +311,9 @@ document.body.appendChild(nudgePad);
 
 export default function MapaPage() {
   const { mapData, setMapData } = useMapa();
+  const { panel, setPanel } = usePanelCtx();
   const iframeRef = useRef<HTMLIFrameElement>(null);
-
-  const [localCfg, setLocalCfg] = useState({
-    panelW: 1.13,
-    panelH: 2.28,
-    powerWp: 400,
-    maxPanels: 0,
-    azimuth: 180
-  });
+  const [maxPanels, setMaxPanels] = useState(0);
 
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
@@ -335,12 +330,33 @@ export default function MapaPage() {
     return () => window.removeEventListener("message", handleMessage);
   }, [setMapData]);
 
-  const pushConfig = (updates: any) => {
-    const newCfg = { ...localCfg, ...updates };
-    setLocalCfg(newCfg);
+  const sendToIframe = (cfg: { panelW: number; panelH: number; powerWp: number; azimuth: number; maxPanels: number }) => {
     if (iframeRef.current?.contentWindow) {
-      iframeRef.current.contentWindow.postMessage(JSON.stringify({ type: "setConfig", ...newCfg }), "*");
+      iframeRef.current.contentWindow.postMessage(JSON.stringify({ type: "setConfig", ...cfg }), "*");
     }
+  };
+
+  const handlePanelChange = (key: keyof typeof panel, rawValue: string) => {
+    const updated = { ...panel, [key]: rawValue };
+    setPanel(updated);
+    sendToIframe({
+      panelW: parseFloat(updated.panelWidth) || 0,
+      panelH: parseFloat(updated.panelHeight) || 0,
+      powerWp: parseFloat(updated.panelPower) || 0,
+      azimuth: parseInt(updated.azimuth) || 0,
+      maxPanels,
+    });
+  };
+
+  const handleMaxPanels = (val: number) => {
+    setMaxPanels(val);
+    sendToIframe({
+      panelW: parseFloat(panel.panelWidth) || 0,
+      panelH: parseFloat(panel.panelHeight) || 0,
+      powerWp: parseFloat(panel.panelPower) || 0,
+      azimuth: parseInt(panel.azimuth) || 0,
+      maxPanels: val,
+    });
   };
 
   return (
@@ -350,22 +366,22 @@ export default function MapaPage() {
           <h2 className="text-xl font-bold text-[#0D2B45] tracking-tight">Mapeamento</h2>
           <p className="text-sm text-muted-foreground mt-1">Desenhe a área do telhado no mapa.</p>
         </div>
-        
+
         <div className="p-6 space-y-4 overflow-y-auto flex-1">
           <div className="space-y-3">
             <Label className="text-[#0D2B45] font-semibold">Painel Solar</Label>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Largura (m)</Label>
-                <Input type="number" value={localCfg.panelW} onChange={e => pushConfig({ panelW: parseFloat(e.target.value) || 0 })} step="0.01" className="h-8 text-sm" />
+                <Input type="number" value={panel.panelWidth} onChange={e => handlePanelChange("panelWidth", e.target.value)} step="0.01" className="h-8 text-sm" />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Altura (m)</Label>
-                <Input type="number" value={localCfg.panelH} onChange={e => pushConfig({ panelH: parseFloat(e.target.value) || 0 })} step="0.01" className="h-8 text-sm" />
+                <Input type="number" value={panel.panelHeight} onChange={e => handlePanelChange("panelHeight", e.target.value)} step="0.01" className="h-8 text-sm" />
               </div>
               <div className="space-y-1 col-span-2">
                 <Label className="text-xs">Potência (Wp)</Label>
-                <Input type="number" value={localCfg.powerWp} onChange={e => pushConfig({ powerWp: parseFloat(e.target.value) || 0 })} className="h-8 text-sm" />
+                <Input type="number" value={panel.panelPower} onChange={e => handlePanelChange("panelPower", e.target.value)} className="h-8 text-sm" />
               </div>
             </div>
           </div>
@@ -374,11 +390,11 @@ export default function MapaPage() {
             <Label className="text-[#0D2B45] font-semibold">Configuração</Label>
             <div className="space-y-1">
               <Label className="text-xs">Máx. Painéis (0 = auto)</Label>
-              <Input type="number" value={localCfg.maxPanels} onChange={e => pushConfig({ maxPanels: parseInt(e.target.value) || 0 })} className="h-8 text-sm" />
+              <Input type="number" value={maxPanels} onChange={e => handleMaxPanels(parseInt(e.target.value) || 0)} className="h-8 text-sm" />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Azimute (0=N, 180=S)</Label>
-              <Input type="number" value={localCfg.azimuth} onChange={e => pushConfig({ azimuth: parseInt(e.target.value) || 0 })} className="h-8 text-sm" />
+              <Input type="number" value={panel.azimuth} onChange={e => handlePanelChange("azimuth", e.target.value)} className="h-8 text-sm" />
             </div>
           </div>
 

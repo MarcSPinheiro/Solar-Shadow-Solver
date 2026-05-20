@@ -10,6 +10,7 @@ import RoiPage from "@/pages/roi";
 import MapaPage from "@/pages/mapa";
 import ReportPage from "@/pages/report";
 
+import { PanelProvider } from "@/contexts/PanelContext";
 import { SolarProvider } from "@/contexts/SolarContext";
 import { RoiProvider } from "@/contexts/RoiContext";
 import { MapaProvider } from "@/contexts/MapaContext";
@@ -36,20 +37,22 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <SolarProvider>
-          <RoiProvider>
-            <MapaProvider>
-              <ClientProvider>
-                <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-                  <Layout>
-                    <Router />
-                  </Layout>
-                </WouterRouter>
-                <Toaster />
-              </ClientProvider>
-            </MapaProvider>
-          </RoiProvider>
-        </SolarProvider>
+        <PanelProvider>
+          <SolarProvider>
+            <RoiProvider>
+              <MapaProvider>
+                <ClientProvider>
+                  <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                    <Layout>
+                      <Router />
+                    </Layout>
+                  </WouterRouter>
+                  <Toaster />
+                </ClientProvider>
+              </MapaProvider>
+            </RoiProvider>
+          </SolarProvider>
+        </PanelProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );
