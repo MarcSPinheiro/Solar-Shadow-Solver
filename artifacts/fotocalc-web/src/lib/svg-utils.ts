@@ -6,49 +6,54 @@ export function buildCrossSectionSvg(result: SolarResult): string {
   const H = 320;
 
   const h = result.panelHeight;
-  const w = result.panelProjectedDepth;
+  const panelProjDepth = result.panelProjectedDepth; // cos(β)*h
   const gap = result.gap;
   const panelRad = result.panelAngle * Math.PI / 180;
   const altDeg = result.altitudeAngle;
+  const altRad = altDeg * Math.PI / 180;
+  const panelProjH = Math.sin(panelRad) * h; // vertical height of panel
+
+  // Layout convention: view from EAST → North=LEFT, South=RIGHT
+  // South-facing panels: base (south edge) to the RIGHT, top (north edge) to the LEFT
+  // Rows: front row (south/right), back row (north/left)
+  // Sun is to the upper-RIGHT (south direction)
 
   const paddingX = 55;
   const paddingBottom = 45;
   const sunR = 20;
-  const sunMargin = sunR + 65; // reserve right side for sun
+  const sunMarginRight = 90; // reserve right of front panel base for sun
   const baseline = H - paddingBottom;
 
-  // Full horizontal extent: from p1 base to p2 top + sun margin
-  const panelGroupW = (w + gap) + Math.cos(panelRad) * h;
-  const panelProjH = Math.sin(panelRad) * h;
-  const availW = W - paddingX - sunMargin;
-  const scale = Math.min(availW / panelGroupW, (baseline - 85) / (panelProjH * 1.2));
+  // Total panel span from back-row-top (leftmost) to front-row-base (rightmost)
+  // = panelProjDepth (back) + gap + panelProjDepth (front) = rowSpacing + panelProjDepth
+  const totalSpan = result.rowSpacing + panelProjDepth;
+  const availW = W - paddingX - sunMarginRight;
+  const scale = Math.min(availW / totalSpan, (baseline - 85) / (panelProjH * 1.2));
 
-  // Panel 1 (left / north = shadowed)
-  const p1x = paddingX;
-  const p1yTop = baseline - Math.sin(panelRad) * h * scale;
-  const p1xTop = p1x + Math.cos(panelRad) * h * scale;
+  // Back row (NORTH / LEFT): top at paddingX, base to its right by panelProjDepth
+  const pbTopX = paddingX;
+  const pbTopY = baseline - panelProjH * scale;
+  const pbBaseX = paddingX + panelProjDepth * scale;
 
-  // Panel 2 (right / south = front row)
-  const p2x = p1x + (w + gap) * scale;
-  const p2yTop = baseline - Math.sin(panelRad) * h * scale;
-  const p2xTop = p2x + Math.cos(panelRad) * h * scale;
+  // Shadow tip = back row's south base (where shadow just reaches)
+  const shadowTipX = pbBaseX;
 
-  // Shadow tip (where gap starts on the ground)
-  const shadowTipX = p1x + w * scale;
-  const shadowTipY = baseline;
+  // Front row (SOUTH / RIGHT): top is gap to the right of shadow tip, base further right
+  const pfTopX = shadowTipX + gap * scale;
+  const pfTopY = baseline - panelProjH * scale;
+  const pfBaseX = pfTopX + panelProjDepth * scale;
 
-  // Sun position: extend the actual ray direction (shadowTip → p2Top) past p2Top
-  const rdx = p2xTop - shadowTipX;
-  const rdy = p2yTop - shadowTipY;
-  const rLen = Math.sqrt(rdx * rdx + rdy * rdy);
-  const rndx = rdx / rLen;
-  const rndy = rdy / rLen;
-  // Clamp sun position to stay within SVG bounds
-  const maxExtByX = rndx > 0 ? (W - sunR - 8 - p2xTop) / rndx : 999;
-  const maxExtByY = rndy < 0 ? (sunR + 8 - p2yTop) / rndy : 999;
-  const sunExt = Math.min(Math.max(50, rLen * 0.55), maxExtByX, maxExtByY);
-  const sunX = p2xTop + sunExt * rndx;
-  const sunY = p2yTop + sunExt * rndy;
+  // Sun direction from shadow tip: upper-right at altitude angle
+  const sndx = Math.cos(altRad);  // rightward = south
+  const sndy = -Math.sin(altRad); // upward
+
+  // Place sun to the right of pfBaseX for visual clarity
+  const targetSunX = Math.min(W - sunR - 8, pfBaseX + 50);
+  const distByX = (targetSunX - shadowTipX) / sndx;
+  const distByY = (baseline - sunR - 8) / (-sndy);
+  const sunDist = Math.min(distByX, distByY, 500);
+  const sunX = shadowTipX + sunDist * sndx;
+  const sunY = baseline + sunDist * sndy;
 
   // Sun rays
   const numRays = 8;
@@ -62,19 +67,10 @@ export function buildCrossSectionSvg(result: SolarResult): string {
     sunRaysSvg += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#F5A623" stroke-width="2" stroke-linecap="round"/>`;
   }
 
-  // Altitude angle arc at shadow tip (between horizontal and sun ray direction)
+  // Altitude angle arc at shadow tip
   const arcR = 42;
-  // Ray direction from shadowTip toward sun: same as (rndx, rndy)
-  const arcEndX = shadowTipX + arcR * rndx;
-  const arcEndY = shadowTipY + arcR * rndy;
-
-  // Panel angle arc at p1 base
-  const pArcR = 30;
-  const pArcEndX = p1x + pArcR * Math.cos(panelRad);
-  const pArcEndY = baseline - pArcR * Math.sin(panelRad);
-
-  // Row spacing annotation
-  const rowSpX = (p1x + w * scale / 2 + p2x / 2);
+  const arcEndX = shadowTipX + arcR * sndx;
+  const arcEndY = baseline + arcR * sndy;
 
   return `
     <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
@@ -101,51 +97,53 @@ export function buildCrossSectionSvg(result: SolarResult): string {
       <circle cx="${sunX.toFixed(1)}" cy="${sunY.toFixed(1)}" r="${sunR}" fill="#FDE68A" stroke="#F5A623" stroke-width="2.5"/>
       <text x="${sunX.toFixed(1)}" y="${(sunY + 4.5).toFixed(1)}" text-anchor="middle" font-size="9" fill="#92400E" font-family="system-ui" font-weight="bold">Sol</text>
 
-      <!-- Sun ray line (grazes top of panel 2 → shadow tip) -->
-      <line x1="${(sunX - sunR * rndx).toFixed(1)}" y1="${(sunY - sunR * rndy).toFixed(1)}"
-            x2="${shadowTipX}" y2="${shadowTipY}"
+      <!-- Ray: sun through front-panel top to shadow tip -->
+      <line x1="${(sunX - sunR * sndx).toFixed(1)}" y1="${(sunY - sunR * sndy).toFixed(1)}"
+            x2="${shadowTipX}" y2="${baseline}"
             stroke="#F59E0B" stroke-width="1.5" stroke-dasharray="6,3" opacity="0.85"/>
 
-      <!-- Altitude angle arc -->
-      <path d="M ${(shadowTipX + arcR).toFixed(1)} ${shadowTipY} A ${arcR} ${arcR} 0 0 1 ${arcEndX.toFixed(1)} ${arcEndY.toFixed(1)}"
+      <!-- Altitude angle arc at shadow tip -->
+      <path d="M ${(shadowTipX + arcR).toFixed(1)} ${baseline} A ${arcR} ${arcR} 0 0 1 ${arcEndX.toFixed(1)} ${arcEndY.toFixed(1)}"
             fill="none" stroke="#1E88E5" stroke-width="1.5"/>
-      <text x="${(shadowTipX + arcR + 7).toFixed(1)}" y="${(shadowTipY - 12).toFixed(1)}"
+      <text x="${(shadowTipX + arcR + 7).toFixed(1)}" y="${(baseline - 12).toFixed(1)}"
             font-size="12" fill="#1E88E5" font-family="system-ui" font-weight="bold">${altDeg.toFixed(1)}°</text>
 
-      <!-- Panel 1 -->
-      <line x1="${p1x}" y1="${baseline}" x2="${p1xTop.toFixed(1)}" y2="${p1yTop.toFixed(1)}"
+      <!-- Back row (NORTH/LEFT): base RIGHT, top LEFT — south-facing ✓ -->
+      <line x1="${pbBaseX.toFixed(1)}" y1="${baseline}"
+            x2="${pbTopX.toFixed(1)}" y2="${pbTopY.toFixed(1)}"
             stroke="#0D2B45" stroke-width="7" stroke-linecap="round"/>
-      <!-- Panel 1 incl. angle arc -->
-      <path d="M ${(p1x + pArcR).toFixed(1)} ${baseline} A ${pArcR} ${pArcR} 0 0 1 ${pArcEndX.toFixed(1)} ${pArcEndY.toFixed(1)}"
+
+      <!-- Front row (SOUTH/RIGHT): base RIGHT, top LEFT — south-facing ✓ -->
+      <line x1="${pfBaseX.toFixed(1)}" y1="${baseline}"
+            x2="${pfTopX.toFixed(1)}" y2="${pfTopY.toFixed(1)}"
+            stroke="#0D2B45" stroke-width="7" stroke-linecap="round"/>
+
+      <!-- Panel inclination angle arc at front panel base -->
+      <path d="M ${(pfBaseX - 28).toFixed(1)} ${baseline} A 28 28 0 0 0 ${(pfBaseX - 28 * Math.cos(panelRad)).toFixed(1)} ${(baseline - 28 * Math.sin(panelRad)).toFixed(1)}"
             fill="none" stroke="#94A3B8" stroke-width="1.2"/>
-      <text x="${(p1x + pArcR + 5).toFixed(1)}" y="${(baseline - 9).toFixed(1)}"
-            font-size="10" fill="#64748B" font-family="system-ui">${result.panelAngle}°</text>
+      <text x="${(pfBaseX - 36).toFixed(1)}" y="${(baseline - 12).toFixed(1)}"
+            text-anchor="end" font-size="10" fill="#64748B" font-family="system-ui">${result.panelAngle}°</text>
 
-      <!-- Panel 2 -->
-      <line x1="${p2x.toFixed(1)}" y1="${baseline}" x2="${p2xTop.toFixed(1)}" y2="${p2yTop.toFixed(1)}"
-            stroke="#0D2B45" stroke-width="7" stroke-linecap="round"/>
-
-      <!-- Gap highlight -->
-      <line x1="${(p1x + w * scale).toFixed(1)}" y1="${baseline}"
-            x2="${p2x.toFixed(1)}" y2="${baseline}"
+      <!-- Gap highlight on ground (from back-row base to front-row top) -->
+      <line x1="${shadowTipX.toFixed(1)}" y1="${baseline}"
+            x2="${pfTopX.toFixed(1)}" y2="${baseline}"
             stroke="#EF4444" stroke-width="4" stroke-linecap="round"/>
-
-      <!-- Horizontal ground projection of panel -->
-      <line x1="${p1x}" y1="${baseline + 14}" x2="${(p1x + w * scale).toFixed(1)}" y2="${baseline + 14}"
-            stroke="#94A3B8" stroke-width="1" stroke-dasharray="3,2"/>
-      <line x1="${p1x}" y1="${baseline + 10}" x2="${p1x}" y2="${baseline + 18}" stroke="#94A3B8" stroke-width="1"/>
-      <line x1="${(p1x + w * scale).toFixed(1)}" y1="${baseline + 10}" x2="${(p1x + w * scale).toFixed(1)}" y2="${baseline + 18}" stroke="#94A3B8" stroke-width="1"/>
-      <text x="${(p1x + w * scale / 2).toFixed(1)}" y="${baseline + 28}"
-            text-anchor="middle" font-size="10" fill="#64748B" font-family="system-ui">Proj. ${w.toFixed(2)}m</text>
-
-      <!-- Gap label -->
-      <text x="${(shadowTipX + (gap * scale) / 2).toFixed(1)}" y="${baseline - 11}"
+      <text x="${((shadowTipX + pfTopX) / 2).toFixed(1)}" y="${(baseline - 11).toFixed(1)}"
             text-anchor="middle" font-size="12" fill="#EF4444" font-family="system-ui" font-weight="bold">Gap: ${gap.toFixed(2)}m</text>
 
-      <!-- Row spacing label -->
-      <line x1="${p1x}" y1="${(p1yTop - 10).toFixed(1)}" x2="${p2x.toFixed(1)}" y2="${(p1yTop - 10).toFixed(1)}"
+      <!-- Front panel ground projection -->
+      <line x1="${pfTopX.toFixed(1)}" y1="${baseline + 14}" x2="${pfBaseX.toFixed(1)}" y2="${baseline + 14}"
+            stroke="#94A3B8" stroke-width="1" stroke-dasharray="3,2"/>
+      <line x1="${pfTopX.toFixed(1)}" y1="${baseline + 10}" x2="${pfTopX.toFixed(1)}" y2="${baseline + 18}" stroke="#94A3B8" stroke-width="1"/>
+      <line x1="${pfBaseX.toFixed(1)}" y1="${baseline + 10}" x2="${pfBaseX.toFixed(1)}" y2="${baseline + 18}" stroke="#94A3B8" stroke-width="1"/>
+      <text x="${((pfTopX + pfBaseX) / 2).toFixed(1)}" y="${baseline + 28}"
+            text-anchor="middle" font-size="10" fill="#64748B" font-family="system-ui">Proj. ${panelProjDepth.toFixed(2)}m</text>
+
+      <!-- Row spacing d: from back-row base to front-row base -->
+      <line x1="${shadowTipX.toFixed(1)}" y1="${(pbTopY - 10).toFixed(1)}"
+            x2="${pfBaseX.toFixed(1)}" y2="${(pbTopY - 10).toFixed(1)}"
             stroke="#1E88E5" stroke-width="1" stroke-dasharray="3,2"/>
-      <text x="${((p1x + p2x) / 2).toFixed(1)}" y="${(p1yTop - 15).toFixed(1)}"
+      <text x="${((shadowTipX + pfBaseX) / 2).toFixed(1)}" y="${(pbTopY - 15).toFixed(1)}"
             text-anchor="middle" font-size="10" fill="#1E88E5" font-family="system-ui">d = ${result.rowSpacing.toFixed(2)}m</text>
     </svg>
   `;
