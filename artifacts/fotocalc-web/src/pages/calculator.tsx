@@ -213,6 +213,81 @@ export default function CalculatorPage() {
               <div className="w-full max-w-md" dangerouslySetInnerHTML={{ __html: buildLayoutSvg(results, parseInt(params.rows) || 1, parseInt(params.cols) || 1) }} />
             </CardContent>
           </Card>
+
+          <Card className="shadow-sm border-[#0D2B45]/15">
+            <CardHeader className="py-4 border-b bg-[#0D2B45]">
+              <CardTitle className="text-base text-white tracking-wide">Resumo do Sistema</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-5 pb-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-4 text-sm">
+                <div>
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Painel</div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between gap-4">
+                      <span className="text-muted-foreground">Altura</span>
+                      <span className="font-medium text-[#0D2B45]">{results.panelHeight.toFixed(2)} m</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span className="text-muted-foreground">Largura</span>
+                      <span className="font-medium text-[#0D2B45]">{results.panelWidth.toFixed(2)} m</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span className="text-muted-foreground">Inclinação</span>
+                      <span className="font-medium text-[#0D2B45]">{results.panelAngle}°</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span className="text-muted-foreground">Latitude</span>
+                      <span className="font-medium text-[#0D2B45]">{params.latitude}°</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Array</div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between gap-4">
+                      <span className="text-muted-foreground">Fileiras × Colunas</span>
+                      <span className="font-medium text-[#0D2B45]">{params.rows} × {params.cols}</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span className="text-muted-foreground">Total painéis</span>
+                      <span className="font-medium text-[#0D2B45]">{(parseInt(params.rows) || 0) * (parseInt(params.cols) || 0)} un.</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span className="text-muted-foreground">Comprimento N-S</span>
+                      <span className="font-medium text-[#0D2B45]">{results.totalLength.toFixed(2)} m</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span className="text-muted-foreground">Largura E-O</span>
+                      <span className="font-medium text-[#0D2B45]">{results.totalWidth.toFixed(2)} m</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Espaçamento / Solar</div>
+                  <div className="space-y-1">
+                    <div className="flex justify-between gap-4">
+                      <span className="text-muted-foreground">Distância d</span>
+                      <span className="font-medium text-[#1E88E5]">{results.rowSpacing.toFixed(3)} m</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span className="text-muted-foreground">Gap livre</span>
+                      <span className={`font-medium ${results.gap < 0.5 ? "text-[#EF4444]" : "text-[#0D2B45]"}`}>{results.gap.toFixed(3)} m</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span className="text-muted-foreground">Sombra (L)</span>
+                      <span className="font-medium text-[#0D2B45]">{results.shadowLength.toFixed(2)} m</span>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <span className="text-muted-foreground">Ângulo sol 21 Dez</span>
+                      <span className="font-medium text-[#F5A623]">{results.altitudeAngle.toFixed(1)}°</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
