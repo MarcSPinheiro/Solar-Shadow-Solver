@@ -1,14 +1,59 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSolar } from "@/contexts/SolarContext";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buildCrossSectionSvg, buildLayoutSvg } from "@/lib/svg-utils";
-import { AlertTriangle, Info } from "lucide-react";
+import { AlertTriangle, Info, MapPin, Loader2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+interface GeoResult {
+  lat: string;
+  lon: string;
+  display_name: string;
+}
 
 export default function CalculatorPage() {
   const { params, setParams, results } = useSolar();
+
+  const [locQuery, setLocQuery] = useState("");
+  const [locResults, setLocResults] = useState<GeoResult[]>([]);
+  const [locLoading, setLocLoading] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (locQuery.length < 2) { setLocResults([]); setShowDropdown(false); return; }
+    const timer = setTimeout(async () => {
+      setLocLoading(true);
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(locQuery)}&countrycodes=pt&format=json&limit=6&addressdetails=0`;
+        const r = await fetch(url, { headers: { "Accept": "application/json" } });
+        const data: GeoResult[] = await r.json();
+        setLocResults(data);
+        setShowDropdown(data.length > 0);
+      } catch (_) {}
+      setLocLoading(false);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [locQuery]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const selectLocation = (r: GeoResult) => {
+    const shortName = r.display_name.split(",")[0].trim();
+    setLocQuery(shortName);
+    setParams(prev => ({ ...prev, latitude: parseFloat(r.lat).toFixed(4) }));
+    setShowDropdown(false);
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setParams(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -28,6 +73,43 @@ export default function CalculatorPage() {
               <CardTitle className="text-lg text-[#0D2B45]">Parâmetros de Entrada</CardTitle>
             </CardHeader>
             <CardContent className="pt-6 space-y-4">
+
+              <div className="space-y-2" ref={dropdownRef}>
+                <Label htmlFor="locSearch" className="flex items-center gap-1">
+                  <MapPin size={13} className="text-[#1E88E5]" /> Localização
+                </Label>
+                <div className="relative">
+                  <Input
+                    type="text"
+                    id="locSearch"
+                    value={locQuery}
+                    onChange={e => setLocQuery(e.target.value)}
+                    onFocus={() => locResults.length > 0 && setShowDropdown(true)}
+                    placeholder="Ex: São Pedro do Sul"
+                    autoComplete="off"
+                  />
+                  {locLoading && (
+                    <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground animate-spin" />
+                  )}
+                  {showDropdown && locResults.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-52 overflow-y-auto">
+                      {locResults.map((r, i) => (
+                        <button
+                          key={i}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-[#F0F6FB] border-b border-slate-100 last:border-b-0 text-[#0D2B45]"
+                          onMouseDown={() => selectLocation(r)}
+                        >
+                          <span className="font-medium">{r.display_name.split(",")[0]}</span>
+                          <span className="text-xs text-muted-foreground ml-1">
+                            {r.display_name.split(",").slice(1, 3).join(",")}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="height">Altura (m)</Label>
@@ -46,7 +128,7 @@ export default function CalculatorPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="latitude">Latitude (°)</Label>
-                  <Input type="number" id="latitude" name="latitude" value={params.latitude} onChange={handleChange} step="0.1" />
+                  <Input type="number" id="latitude" name="latitude" value={params.latitude} onChange={handleChange} step="0.0001" />
                 </div>
               </div>
 
@@ -62,7 +144,7 @@ export default function CalculatorPage() {
               </div>
             </CardContent>
           </Card>
-          
+
           <Alert variant="default" className="bg-[#EBF5FF] border-[#1E88E5] text-[#0D2B45]">
             <Info className="h-4 w-4 text-[#1E88E5]" />
             <AlertTitle>Otimização 21 Dez</AlertTitle>

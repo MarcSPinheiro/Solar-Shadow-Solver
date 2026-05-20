@@ -39,6 +39,10 @@ html, body { height: 100%; overflow: hidden; background: #0D2B45; }
 }
 .nudge-btn:active { background: rgba(30,136,229,0.7); }
 .nudge-reset { font-size: 11px; color: #fff; }
+.move-pad {
+  position: absolute; bottom: 48px; left: 110px; z-index: 1001;
+  display: grid; grid-template-columns: repeat(3, 30px); grid-template-rows: repeat(3, 30px); gap: 2px;
+}
 #compassBox {
   position: absolute; right: 8px; bottom: 90px; z-index: 1001;
   text-align: center; pointer-events: none;
@@ -77,6 +81,14 @@ html, body { height: 100%; overflow: hidden; background: #0D2B45; }
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 <script>
 var cfg = { panelW: 1.13, panelH: 2.28, powerWp: 400, maxPanels: 0, azimuth: 180 };
+var gridOffset = { lat: 0, lng: 0 };
+var moveDeltaLat = 0.5 / 111000;
+var moveDeltaLng = 0.5 / 80000;
+function moveGrid(dlat, dlng) {
+  gridOffset.lat += dlat;
+  gridOffset.lng += dlng;
+  if (currentPolygon) fillPanels();
+}
 
 function azLabel(az) {
   if (az>=337.5||az<22.5) return "N";
@@ -110,6 +122,9 @@ var map = L.map("map", { zoomControl: true }).setView([39.5, -8.0], 7);
 L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
   attribution: "Esri", maxZoom: 22
 }).addTo(map);
+L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {
+  attribution: "Esri", maxZoom: 22, opacity: 0.9
+}).addTo(map);
 
 var drawnItems = new L.FeatureGroup().addTo(map);
 var panelLayer = new L.FeatureGroup().addTo(map);
@@ -126,6 +141,7 @@ map.on(L.Draw.Event.CREATED, function(e) {
   panelLayer.clearLayers();
   currentPolygon = e.layer;
   drawnItems.addLayer(currentPolygon);
+  gridOffset = { lat: 0, lng: 0 };
   fillPanels();
 });
 map.on(L.Draw.Event.EDITED, function() {
@@ -155,7 +171,8 @@ function fillPanels() {
   panelLayer.clearLayers();
   var latlngs = currentPolygon.getLatLngs()[0];
   var bounds = currentPolygon.getBounds();
-  var center = bounds.getCenter();
+  var boundsCenter = bounds.getCenter();
+  var center = L.latLng(boundsCenter.lat + gridOffset.lat, boundsCenter.lng + gridOffset.lng);
   var nw = L.latLng(bounds.getNorth(), bounds.getWest());
   var ne = L.latLng(bounds.getNorth(), bounds.getEast());
   var sw = L.latLng(bounds.getSouth(), bounds.getWest());
@@ -305,6 +322,20 @@ nudgePad.innerHTML = [
   '<div></div>'
 ].join("");
 document.body.appendChild(nudgePad);
+var movePad = document.createElement("div");
+movePad.className = "move-pad";
+movePad.innerHTML = [
+  '<button class="nudge-btn" onclick="moveGrid(moveDeltaLat,-moveDeltaLng)" title="NO">↖</button>',
+  '<button class="nudge-btn" onclick="moveGrid(moveDeltaLat,0)" title="N">↑</button>',
+  '<button class="nudge-btn" onclick="moveGrid(moveDeltaLat,moveDeltaLng)" title="NE">↗</button>',
+  '<button class="nudge-btn" onclick="moveGrid(0,-moveDeltaLng)" title="O">←</button>',
+  '<button class="nudge-btn nudge-reset" onclick="gridOffset={lat:0,lng:0};if(currentPolygon)fillPanels()" title="Centrar">⊙</button>',
+  '<button class="nudge-btn" onclick="moveGrid(0,moveDeltaLng)" title="E">→</button>',
+  '<button class="nudge-btn" onclick="moveGrid(-moveDeltaLat,-moveDeltaLng)" title="SO">↙</button>',
+  '<button class="nudge-btn" onclick="moveGrid(-moveDeltaLat,0)" title="S">↓</button>',
+  '<button class="nudge-btn" onclick="moveGrid(-moveDeltaLat,moveDeltaLng)" title="SE">↘</button>',
+].join("");
+document.body.appendChild(movePad);
 </script>
 </body>
 </html>`;
