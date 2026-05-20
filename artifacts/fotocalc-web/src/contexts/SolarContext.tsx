@@ -8,6 +8,10 @@ export interface SolarParams {
   latitude: string;
   rows: string;
   cols: string;
+  panelPower: string;
+  mountType: string;
+  inverterPower: string;
+  inverterPhase: string;
 }
 
 export interface SolarResult {
@@ -22,6 +26,7 @@ export interface SolarResult {
   panelWidth: number;
   panelAngle: number;
   panelProjectedDepth: number;
+  totalPowerWp: number;
 }
 
 interface SolarContextType {
@@ -39,6 +44,7 @@ function computeSolar(params: SolarParams): SolarResult {
   const lat = parseFloat(params.latitude) || 38.7;
   const rows = parseInt(params.rows) || 4;
   const cols = parseInt(params.cols) || 5;
+  const panelPower = parseFloat(params.panelPower) || 400;
 
   const toRad = (deg: number) => deg * Math.PI / 180;
   const dec = lat >= 0 ? -23.45 : 23.45;
@@ -55,6 +61,7 @@ function computeSolar(params: SolarParams): SolarResult {
 
   const totalWidth = cols * w + (cols - 1) * 0.05;
   const totalLength = panelProjectedDepth + (rows - 1) * rowSpacing;
+  const totalPowerWp = rows * cols * panelPower;
 
   return {
     gap,
@@ -68,17 +75,28 @@ function computeSolar(params: SolarParams): SolarResult {
     panelWidth: w,
     panelAngle: beta,
     panelProjectedDepth,
+    totalPowerWp,
   };
 }
 
+const DEFAULT_LOCAL = {
+  latitude: "38.7",
+  rows: "4",
+  cols: "5",
+  mountType: "triangulos",
+  inverterPower: "",
+  inverterPhase: "mono",
+};
+
 export function SolarProvider({ children }: { children: React.ReactNode }) {
   const { panel, setPanel } = usePanelCtx();
-  const [localParams, setLocalParams] = useState({ latitude: "38.7", rows: "4", cols: "5" });
+  const [localParams, setLocalParams] = useState(DEFAULT_LOCAL);
 
   const params: SolarParams = {
     height: panel.panelHeight,
     width: panel.panelWidth,
     angle: panel.inclination,
+    panelPower: panel.panelPower,
     ...localParams,
   };
 
@@ -87,6 +105,7 @@ export function SolarProvider({ children }: { children: React.ReactNode }) {
       height: panel.panelHeight,
       width: panel.panelWidth,
       angle: panel.inclination,
+      panelPower: panel.panelPower,
       ...localParams,
     };
     const next = typeof updater === "function" ? updater(current) : updater;
@@ -95,13 +114,22 @@ export function SolarProvider({ children }: { children: React.ReactNode }) {
       panelHeight: next.height,
       panelWidth: next.width,
       inclination: next.angle,
+      panelPower: next.panelPower,
     }));
-    setLocalParams({ latitude: next.latitude, rows: next.rows, cols: next.cols });
+    setLocalParams({
+      latitude: next.latitude,
+      rows: next.rows,
+      cols: next.cols,
+      mountType: next.mountType,
+      inverterPower: next.inverterPower,
+      inverterPhase: next.inverterPhase,
+    });
   };
 
   const results = useMemo(
     () => computeSolar(params),
-    [panel.panelHeight, panel.panelWidth, panel.inclination, localParams.latitude, localParams.rows, localParams.cols]
+    [panel.panelHeight, panel.panelWidth, panel.inclination, panel.panelPower,
+     localParams.latitude, localParams.rows, localParams.cols]
   );
 
   return (
