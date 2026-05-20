@@ -3,7 +3,7 @@ import { useSolar } from "@/contexts/SolarContext";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { buildCrossSectionSvg, buildLayoutSvg } from "@/lib/svg-utils";
+import { buildCrossSectionSvg, buildLayoutSvg, buildCoplanarLayoutSvg } from "@/lib/svg-utils";
 import { AlertTriangle, Info, MapPin, Loader2, Zap } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
@@ -338,13 +338,30 @@ export default function CalculatorPage() {
               </Card>
             </>
           ) : (
-            <Alert variant="default" className="bg-[#EBF5FF] border-[#1E88E5] text-[#0D2B45]">
-              <Info className="h-4 w-4 text-[#1E88E5]" />
-              <AlertTitle>Telhado Coplanar</AlertTitle>
-              <AlertDescription className="text-sm">
-                Instalação coplanar ao telhado — os painéis acompanham a inclinação da cobertura. Não existe cálculo de distanciamento por sombreamento. Consulte o Resumo do Sistema abaixo para a potência instalada.
-              </AlertDescription>
-            </Alert>
+            <>
+              <Alert variant="default" className="bg-[#EBF5FF] border-[#1E88E5] text-[#0D2B45]">
+                <Info className="h-4 w-4 text-[#1E88E5]" />
+                <AlertTitle>Telhado Coplanar</AlertTitle>
+                <AlertDescription className="text-sm">
+                  Painéis paralelos à cobertura — sem cálculo de sombras. Potência calculada abaixo.
+                </AlertDescription>
+              </Alert>
+              <Card className="shadow-sm">
+                <CardHeader className="py-4 border-b">
+                  <CardTitle className="text-base text-[#0D2B45]">Disposição (Top-down)</CardTitle>
+                </CardHeader>
+                <CardContent className="p-0 overflow-hidden flex justify-center bg-[#F0F6FB]">
+                  <div className="w-full max-w-md" dangerouslySetInnerHTML={{
+                    __html: buildCoplanarLayoutSvg(
+                      parseFloat(params.height) || 1,
+                      parseFloat(params.width) || 1,
+                      parseInt(params.rows) || 1,
+                      parseInt(params.cols) || 1
+                    )
+                  }} />
+                </CardContent>
+              </Card>
+            </>
           )}
 
           {/* Resumo do Sistema — always visible */}

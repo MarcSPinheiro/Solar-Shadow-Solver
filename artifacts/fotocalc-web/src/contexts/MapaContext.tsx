@@ -12,9 +12,11 @@ export interface MapData {
   panelW?: number;
   panelH?: number;
   powerWp?: number;
+  mountType?: string;
   roofBoundsW?: number;
   roofBoundsH?: number;
   panelSvg?: string;
+  mapImageDataUrl?: string;
 }
 
 interface MapaContextType {

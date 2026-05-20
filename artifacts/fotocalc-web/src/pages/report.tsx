@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Printer } from "lucide-react";
 import logoSrc from "@/logo.png";
-import { buildCrossSectionSvg, buildLayoutSvg, buildMonthlyBarChartSvg, buildRoiLineChartSvg } from "@/lib/svg-utils";
+import { buildCrossSectionSvg, buildLayoutSvg, buildCoplanarLayoutSvg, buildMonthlyBarChartSvg, buildRoiLineChartSvg } from "@/lib/svg-utils";
 
 export default function ReportPage() {
   const { client, setClient } = useClient();
@@ -97,14 +97,19 @@ export default function ReportPage() {
 
         ${mapData ? `
         <div class="section">
-          <div class="section-title">Análise de Cobertura</div>
+          <div class="section-title">Análise de Cobertura — Mapa Satélite</div>
+          ${mapData.mapImageDataUrl ? `
+          <div style="text-align:center; margin-bottom:20px;">
+            <img src="${mapData.mapImageDataUrl}" style="max-width:100%; max-height:420px; border-radius:10px; border:1px solid #E2E8F0; object-fit:cover;" alt="Mapa satélite com painéis" />
+            <div style="font-size:11px;color:#94A3B8;margin-top:6px;">Vista satélite com disposição dos painéis</div>
+          </div>` : ''}
           <div class="grid-4 mb-4">
             <div class="box">
-              <div class="box-label">Módulos Possíveis</div>
+              <div class="box-label">Módulos</div>
               <div class="box-value highlight">${mapData.panelCount} un</div>
             </div>
             <div class="box">
-              <div class="box-label">Potência Total</div>
+              <div class="box-label">Potência</div>
               <div class="box-value">${mapData.totalKwp?.toFixed(2)} kWp</div>
             </div>
             <div class="box">
@@ -112,16 +117,50 @@ export default function ReportPage() {
               <div class="box-value">${mapData.roofArea} m²</div>
             </div>
             <div class="box">
+              <div class="box-label">Tipo</div>
+              <div class="box-value" style="font-size:14px;">${mapData.mountType === 'coplanar' ? 'Coplanar' : 'Triângulos'}</div>
+            </div>
+          </div>
+          <div class="grid-4">
+            <div class="box" style="grid-column:span 2">
               <div class="box-label">Orientação</div>
               <div class="box-value">${mapData.orientationLabel}</div>
             </div>
+            <div class="box" style="grid-column:span 2">
+              <div class="box-label">Azimute</div>
+              <div class="box-value">${mapData.azimuth}°</div>
+            </div>
           </div>
-          ${mapData.panelSvg ? `<div class="svg-container" style="max-width: 500px; margin: 0 auto;">${mapData.panelSvg}</div>` : ''}
+          ${mapData.panelSvg && !mapData.mapImageDataUrl ? `<div class="svg-container" style="max-width: 500px; margin: 20px auto 0;">${mapData.panelSvg}</div>` : ''}
         </div>
         ` : ''}
 
+        ${solarParams.mountType === 'coplanar' ? `
         <div class="section">
-          <div class="section-title">Estudo de Sombreamento e Espaçamento</div>
+          <div class="section-title">Disposição dos Painéis — Telhado Coplanar</div>
+          <div class="grid-4" style="margin-bottom: 20px;">
+            <div class="box">
+              <div class="box-label">Fileiras × Colunas</div>
+              <div class="box-value highlight">${solarParams.rows} × ${solarParams.cols}</div>
+            </div>
+            <div class="box">
+              <div class="box-label">Total Painéis</div>
+              <div class="box-value">${(parseInt(solarParams.rows)||0) * (parseInt(solarParams.cols)||0)} un</div>
+            </div>
+            <div class="box">
+              <div class="box-label">Alt. Painel</div>
+              <div class="box-value">${solarResults.panelHeight.toFixed(2)} m</div>
+            </div>
+            <div class="box">
+              <div class="box-label">Larg. Painel</div>
+              <div class="box-value">${solarResults.panelWidth.toFixed(2)} m</div>
+            </div>
+          </div>
+          <div class="svg-container" style="max-width: 400px; margin: 0 auto;">${buildCoplanarLayoutSvg(solarResults.panelHeight, solarResults.panelWidth, parseInt(solarParams.rows)||1, parseInt(solarParams.cols)||1)}</div>
+        </div>
+        ` : `
+        <div class="section">
+          <div class="section-title">Estudo de Sombreamento e Espaçamento — Estrutura Triângulos</div>
           <div class="grid-4" style="margin-bottom: 20px;">
             <div class="box">
               <div class="box-label">Distância Início-Início</div>
@@ -143,6 +182,7 @@ export default function ReportPage() {
           <div class="svg-container">${buildCrossSectionSvg(solarResults)}</div>
           <div class="svg-container" style="max-width: 400px; margin: 0 auto;">${buildLayoutSvg(solarResults, parseInt(solarParams.rows)||1, parseInt(solarParams.cols)||1)}</div>
         </div>
+        `}
 
         ${roiResults ? `
         <div class="section" style="page-break-before: always;">

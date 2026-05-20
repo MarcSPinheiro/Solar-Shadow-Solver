@@ -203,6 +203,45 @@ export function buildLayoutSvg(result: SolarResult, rows: number, cols: number):
   `;
 }
 
+export function buildCoplanarLayoutSvg(panelH: number, panelW: number, rows: number, cols: number): string {
+  const W = 400;
+  const H = 400;
+  const gapRow = 0.02;
+  const gapCol = 0.05;
+
+  const totalW = cols * panelW + (cols - 1) * gapCol;
+  const totalH = rows * panelH + (rows - 1) * gapRow;
+
+  const paddingX = 40;
+  const paddingY = 40;
+  const scale = Math.min((W - paddingX * 2) / totalW, (H - paddingY * 2) / totalH);
+
+  const startX = (W - totalW * scale) / 2;
+  const startY = (H - totalH * scale) / 2;
+
+  let rects = "";
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const x = startX + (c * (panelW + gapCol)) * scale;
+      const y = startY + (r * (panelH + gapRow)) * scale;
+      rects += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(panelW * scale - 1).toFixed(1)}" height="${(panelH * scale - 1).toFixed(1)}" fill="#3B82F6" stroke="#0D2B45" stroke-width="1" rx="2"/>`;
+    }
+  }
+
+  return `
+    <svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+      <rect width="${W}" height="${H}" fill="#F0F6FB"/>
+      <text x="${W/2}" y="20" text-anchor="middle" font-size="14" font-weight="bold" fill="#0D2B45" font-family="system-ui">N</text>
+      <text x="${W/2}" y="${H-10}" text-anchor="middle" font-size="14" font-weight="bold" fill="#0D2B45" font-family="system-ui">S</text>
+      ${rects}
+      <line x1="${(startX-10).toFixed(1)}" y1="${startY.toFixed(1)}" x2="${(startX-10).toFixed(1)}" y2="${(startY+totalH*scale).toFixed(1)}" stroke="#94A3B8" stroke-width="1"/>
+      <text x="${(startX-15).toFixed(1)}" y="${(H/2).toFixed(1)}" text-anchor="middle" transform="rotate(-90,${(startX-15).toFixed(1)},${(H/2).toFixed(1)})" font-size="12" fill="#64748B" font-family="system-ui">${totalH.toFixed(2)}m</text>
+      <line x1="${startX.toFixed(1)}" y1="${(startY-10).toFixed(1)}" x2="${(startX+totalW*scale).toFixed(1)}" y2="${(startY-10).toFixed(1)}" stroke="#94A3B8" stroke-width="1"/>
+      <text x="${(W/2).toFixed(1)}" y="${(startY-15).toFixed(1)}" text-anchor="middle" font-size="12" fill="#64748B" font-family="system-ui">${totalW.toFixed(2)}m</text>
+    </svg>
+  `;
+}
+
 export function buildMonthlyBarChartSvg(monthlyKwh: number[]): string {
   const W = 600;
   const H = 250;

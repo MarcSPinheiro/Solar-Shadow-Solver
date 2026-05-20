@@ -86,6 +86,7 @@ html, body { height: 100%; overflow: hidden; background: #0D2B45; }
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
 // cfg.mountType: "triangulos" | "coplanar"
 // cfg.panelProjDepth: horizontal projection of panel (cos(β)*h) — used for triangulos footprint
@@ -287,6 +288,23 @@ function fillPanels() {
     roofBoundsW:Math.round(boundsW), roofBoundsH:Math.round(boundsH),
     panelSvg: panelSvg
   }),"*");
+
+  // Capture satellite map screenshot (2s delay for tiles to render)
+  if (typeof html2canvas !== "undefined" && panels.length > 0) {
+    setTimeout(function() {
+      html2canvas(document.getElementById("map"), {
+        useCORS: true,
+        allowTaint: false,
+        scale: 0.65,
+        logging: false,
+        imageTimeout: 8000,
+        backgroundColor: "#0D2B45"
+      }).then(function(canvas) {
+        var dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+        window.parent.postMessage(JSON.stringify({ type:"mapCapture", imageDataUrl:dataUrl }), "*");
+      }).catch(function() {});
+    }, 2000);
+  }
 }
 
 function isPointInPolygon(point, polygon) {
@@ -440,13 +458,22 @@ export default function MapaPage() {
     const handleMessage = (e: MessageEvent) => {
       try {
         const data = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
-        if (data.type === "roofMeasured") setMapData(data);
-        else if (data.type === "roofCleared") setMapData(null);
+        if (data.type === "roofMeasured") {
+          setMapData(prev => ({ ...(prev || {}), ...data }));
+          // Sync azimuth back to PanelContext so other pages update
+          if (data.azimuth !== undefined) {
+            setPanel(prev => ({ ...prev, azimuth: String(data.azimuth) }));
+          }
+        } else if (data.type === "roofCleared") {
+          setMapData(null);
+        } else if (data.type === "mapCapture") {
+          setMapData(prev => prev ? { ...prev, mapImageDataUrl: data.imageDataUrl } : null);
+        }
       } catch {}
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [setMapData]);
+  }, [setMapData, setPanel]);
 
   const handlePanelChange = (key: keyof typeof panel, val: string) => {
     const updated = { ...panel, [key]: val };
