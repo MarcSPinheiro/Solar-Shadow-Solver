@@ -451,6 +451,7 @@ export default function MapaPage() {
   }, [
     panel.panelWidth, panel.panelHeight, panel.panelPower, panel.azimuth,
     solarParams.mountType, solarResults.panelProjectedDepth, solarResults.rowSpacing,
+    solarParams.rows, solarParams.cols,
     panelMode, manualPanels,
   ]);
 
@@ -459,10 +460,21 @@ export default function MapaPage() {
       try {
         const data = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
         if (data.type === "roofMeasured") {
-          setMapData(prev => ({ ...(prev || {}), ...data }));
-          // Sync azimuth back to PanelContext so other pages update
+          // Guard: only update state when something actually changed to avoid re-render cascades
+          setMapData(prev => {
+            const next = { ...(prev || {}), ...data };
+            // Keep existing mapImageDataUrl if not in new data
+            if (prev?.mapImageDataUrl && !data.mapImageDataUrl) {
+              next.mapImageDataUrl = prev.mapImageDataUrl;
+            }
+            return next;
+          });
+          // Sync azimuth: guard with same-value check so React bails out if unchanged
           if (data.azimuth !== undefined) {
-            setPanel(prev => ({ ...prev, azimuth: String(data.azimuth) }));
+            setPanel(prev => {
+              const az = String(data.azimuth);
+              return prev.azimuth === az ? prev : { ...prev, azimuth: az };
+            });
           }
         } else if (data.type === "roofCleared") {
           setMapData(null);
