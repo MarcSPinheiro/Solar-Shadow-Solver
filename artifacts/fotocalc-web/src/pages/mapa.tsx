@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useMapa } from "@/contexts/MapaContext";
 import { usePanelCtx } from "@/contexts/PanelContext";
+import { useSolar } from "@/contexts/SolarContext";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 
 const MAP_HTML = `<!DOCTYPE html>
 <html>
@@ -23,6 +23,12 @@ html, body { height: 100%; overflow: hidden; background: #0D2B45; }
   border-radius: 16px; font-family: -apple-system,sans-serif; font-size: 12px;
   z-index: 1000; pointer-events: none; white-space: nowrap; max-width: 92%;
   border: 1px solid rgba(245,166,35,0.5);
+}
+.mount-badge {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  background: rgba(13,43,69,0.88); color: #F5A623; padding: 4px 12px;
+  border-radius: 12px; font-family: -apple-system,sans-serif; font-size: 11px;
+  z-index: 1000; pointer-events: none; border: 1px solid rgba(245,166,35,0.4);
 }
 .leaflet-draw-toolbar a { background-color: #0D2B45 !important; }
 .leaflet-draw-toolbar a:hover { background-color: #1a3d5c !important; }
@@ -58,6 +64,7 @@ html, body { height: 100%; overflow: hidden; background: #0D2B45; }
 <body>
 <div id="map"></div>
 <div id="info" class="info-bar">📐 Desenhe a área do telhado</div>
+<div id="mountBadge" class="mount-badge">▲ Estrutura Triângulos</div>
 <div id="compassBox">
   <svg width="58" height="58" viewBox="0 0 58 58" xmlns="http://www.w3.org/2000/svg">
     <circle cx="29" cy="29" r="27" fill="rgba(13,43,69,0.93)" stroke="rgba(245,166,35,0.55)" stroke-width="1.5"/>
@@ -80,7 +87,19 @@ html, body { height: 100%; overflow: hidden; background: #0D2B45; }
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 <script>
-var cfg = { panelW: 1.13, panelH: 2.28, powerWp: 400, maxPanels: 0, azimuth: 180 };
+// cfg.mountType: "triangulos" | "coplanar"
+// cfg.panelProjDepth: horizontal projection of panel (cos(β)*h) — used for triangulos footprint
+// cfg.rowSpacing: center-to-center row distance for triangulos
+var cfg = {
+  panelW: 1.13,
+  panelH: 2.28,
+  panelProjDepth: 1.974,
+  rowSpacing: 4.132,
+  mountType: "triangulos",
+  powerWp: 400,
+  maxPanels: 0,
+  azimuth: 180
+};
 var gridOffset = { lat: 0, lng: 0 };
 var moveDeltaLat = 0.5 / 111000;
 var moveDeltaLng = 0.5 / 80000;
@@ -116,6 +135,16 @@ function updateCompass(az) {
   document.getElementById("compassArrow").setAttribute("transform","rotate("+rotDeg+",29,29)");
   var devText = dev < 2 ? "Sul · ideal" : label+" · "+Math.round(dev)+"° de Sul";
   document.getElementById("compassLabel").textContent = devText;
+}
+function updateMountBadge() {
+  var el = document.getElementById("mountBadge");
+  if (cfg.mountType === "coplanar") {
+    el.textContent = "▬ Telhado Coplanar";
+    el.style.color = "#60A5FA";
+  } else {
+    el.textContent = "▲ Estrutura Triângulos";
+    el.style.color = "#F5A623";
+  }
 }
 
 var map = L.map("map", { zoomControl: true }).setView([39.5, -8.0], 7);
@@ -181,9 +210,13 @@ function fillPanels() {
   var az = cfg.azimuth;
   var azPerp = (az + 90) % 360;
 
-  var gap = 0.1;
-  var stepAlong = cfg.panelH + 0.02;
+  // Triangulos: panels have projected footprint (cos(β)×h) and are spaced by rowSpacing
+  // Coplanar: panels are full height, spaced by panelH + small gap
+  var isTriangulos = cfg.mountType === "triangulos";
+  var footprintAlong = isTriangulos ? cfg.panelProjDepth : cfg.panelH;
+  var stepAlong = isTriangulos ? cfg.rowSpacing : (cfg.panelH + 0.02);
   var stepAcross = cfg.panelW + 0.05;
+
   var spanAlong = boundsH * 1.5;
   var spanAcross = boundsW * 1.5;
   var nAlong = Math.ceil(spanAlong / stepAlong) + 2;
@@ -197,10 +230,11 @@ function fillPanels() {
       var distAcross = j * stepAcross;
       var tmp = destPoint(center.lat, center.lng, az, distAlong);
       var pc = destPoint(tmp[0], tmp[1], azPerp, distAcross);
-      var c0 = destPoint(pc[0], pc[1], az, -cfg.panelH/2);
+      // Panel drawn with footprintAlong in N-S direction, centered on pc
+      var c0 = destPoint(pc[0], pc[1], az, -footprintAlong/2);
       var c1 = destPoint(c0[0], c0[1], azPerp, -cfg.panelW/2);
       var c2 = destPoint(c1[0], c1[1], azPerp, cfg.panelW);
-      var c3 = destPoint(c0[0], c0[1], az, cfg.panelH);
+      var c3 = destPoint(c0[0], c0[1], az, footprintAlong);
       var c4 = destPoint(c3[0], c3[1], azPerp, -cfg.panelW/2);
       var c5 = destPoint(c4[0], c4[1], azPerp, cfg.panelW);
       var corners = [L.latLng(c1),L.latLng(c2),L.latLng(c5),L.latLng(c4)];
@@ -215,11 +249,19 @@ function fillPanels() {
     }
   }
 
+  var fillColor = isTriangulos ? "#1E88E5" : "#3B82F6";
   panels.forEach(function(corners) {
     L.polygon(corners, {
-      color:"#1E88E5", fillColor:"#1E88E5", fillOpacity:0.6,
-      weight:1, interactive:false
+      color: isTriangulos ? "#1565C0" : "#1D4ED8",
+      fillColor: fillColor,
+      fillOpacity: isTriangulos ? 0.65 : 0.55,
+      weight: 1, interactive: false
     }).addTo(panelLayer);
+    // For triangulos, draw a thin gap line to hint at row spacing
+    if (isTriangulos) {
+      var gapStart = corners[3]; // south-west corner of panel
+      var gapEnd   = corners[2]; // south-east corner of panel
+    }
   });
 
   var roofArea = L.GeometryUtil ? L.GeometryUtil.geodesicArea(latlngs) : boundsW*boundsH;
@@ -230,8 +272,9 @@ function fillPanels() {
   var label = azLabel(az);
   var dev = Math.min(Math.abs(az-180), 360-Math.abs(az-180));
   var devText = dev < 2 ? "Sul · ideal" : label+" · "+Math.round(dev)+"° de Sul";
+  var typeLabel = isTriangulos ? "▲ Triâng." : "▬ Coplan.";
   updateCompass(az);
-  document.getElementById("info").textContent = "✅ "+count+" painéis · "+totalKwp.toFixed(2)+" kWp · "+devText;
+  document.getElementById("info").textContent = typeLabel+" · "+count+" painéis · "+totalKwp.toFixed(2)+" kWp · "+devText;
 
   var panelSvg = capturePanelSvg(panels, latlngs);
 
@@ -240,6 +283,7 @@ function fillPanels() {
     panelCount:count, capacity:count, totalKwp:totalKwp, adjKwp:adjKwp,
     azimuth:az, orientationLabel:devText, penaltyPct:penaltyPct,
     panelW:cfg.panelW, panelH:cfg.panelH, powerWp:cfg.powerWp,
+    mountType:cfg.mountType,
     roofBoundsW:Math.round(boundsW), roofBoundsH:Math.round(boundsH),
     panelSvg: panelSvg
   }),"*");
@@ -273,17 +317,19 @@ function capturePanelSvg(panels, roofLatlngs) {
     return [10+mx*scale, 10+my*scale];
   }
   var roofPts=roofLatlngs.map(function(c){ var p=toSvg(c.lat,c.lng); return p[0]+","+p[1]; }).join(" ");
+  var fillColor = cfg.mountType === "coplanar" ? "#3B82F6" : "#1E88E5";
   var panelRects=panels.map(function(corners){
     var pts=corners.map(function(c){ var p=toSvg(c.lat,c.lng); return p[0]+","+p[1]; }).join(" ");
-    return '<polygon points="'+pts+'" fill="#1E88E5" stroke="#0D2B45" stroke-width="0.8" fill-opacity="0.75"/>';
+    return '<polygon points="'+pts+'" fill="'+fillColor+'" stroke="#0D2B45" stroke-width="0.8" fill-opacity="0.75"/>';
   }).join("");
   var dev=Math.min(Math.abs(cfg.azimuth-180),360-Math.abs(cfg.azimuth-180));
   var compassLabel=dev<2?"Sul · ideal":azLabel(cfg.azimuth)+" · "+Math.round(dev)+"° de Sul";
+  var typeLabel = cfg.mountType === "coplanar" ? "Coplanar" : "Triângulos";
   return '<svg viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg">'+
     '<rect width="'+W+'" height="'+H+'" fill="#F0F6FB" rx="6"/>'+
     '<polygon points="'+roofPts+'" fill="rgba(245,166,35,0.08)" stroke="#F5A623" stroke-width="1.5" stroke-dasharray="5,3"/>'+
     panelRects+
-    '<text x="'+(W/2)+'" y="18" text-anchor="middle" font-size="11" fill="#0D2B45" font-family="Arial">'+compassLabel+'</text>'+
+    '<text x="'+(W/2)+'" y="16" text-anchor="middle" font-size="10" fill="#0D2B45" font-family="Arial">'+typeLabel+' · '+compassLabel+'</text>'+
     '</svg>';
 }
 
@@ -298,11 +344,14 @@ window.addEventListener("message", function(e) {
   try {
     var d = typeof e.data==="string" ? JSON.parse(e.data) : e.data;
     if (d.type==="setConfig") {
-      if (d.panelW) cfg.panelW=d.panelW;
-      if (d.panelH) cfg.panelH=d.panelH;
-      if (d.powerWp) cfg.powerWp=d.powerWp;
-      if (d.maxPanels!==undefined) cfg.maxPanels=d.maxPanels;
-      if (d.azimuth!==undefined) { cfg.azimuth=d.azimuth; updateCompass(cfg.azimuth); }
+      if (d.panelW !== undefined) cfg.panelW = d.panelW;
+      if (d.panelH !== undefined) cfg.panelH = d.panelH;
+      if (d.powerWp !== undefined) cfg.powerWp = d.powerWp;
+      if (d.maxPanels !== undefined) cfg.maxPanels = d.maxPanels;
+      if (d.azimuth !== undefined) { cfg.azimuth = d.azimuth; updateCompass(cfg.azimuth); }
+      if (d.mountType !== undefined) { cfg.mountType = d.mountType; updateMountBadge(); }
+      if (d.panelProjDepth !== undefined) cfg.panelProjDepth = d.panelProjDepth;
+      if (d.rowSpacing !== undefined) cfg.rowSpacing = d.rowSpacing;
       if (currentPolygon) fillPanels();
     }
   } catch(_){}
@@ -336,71 +385,110 @@ movePad.innerHTML = [
   '<button class="nudge-btn" onclick="moveGrid(-moveDeltaLat,moveDeltaLng)" title="SE">↘</button>',
 ].join("");
 document.body.appendChild(movePad);
+
+updateMountBadge();
 </script>
 </body>
 </html>`;
 
+type PanelMode = "auto" | "calculator" | "manual";
+
 export default function MapaPage() {
   const { mapData, setMapData } = useMapa();
   const { panel, setPanel } = usePanelCtx();
+  const { params: solarParams, results: solarResults } = useSolar();
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [maxPanels, setMaxPanels] = useState(0);
 
-  useEffect(() => {
-    const handleMessage = (e: MessageEvent) => {
-      try {
-        const data = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
-        if (data.type === "roofMeasured") {
-          setMapData(data);
-        } else if (data.type === "roofCleared") {
-          setMapData(null);
-        }
-      } catch (err) {}
-    };
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, [setMapData]);
+  const [panelMode, setPanelMode] = useState<PanelMode>("auto");
+  const [manualPanels, setManualPanels] = useState("20");
 
-  const sendToIframe = (cfg: { panelW: number; panelH: number; powerWp: number; azimuth: number; maxPanels: number }) => {
+  const calcPanels = (parseInt(solarParams.rows) || 0) * (parseInt(solarParams.cols) || 0);
+
+  const getMaxPanels = (): number => {
+    if (panelMode === "auto") return 0;
+    if (panelMode === "calculator") return calcPanels;
+    return parseInt(manualPanels) || 0;
+  };
+
+  const buildConfig = () => ({
+    panelW: parseFloat(panel.panelWidth) || 0,
+    panelH: parseFloat(panel.panelHeight) || 0,
+    powerWp: parseFloat(panel.panelPower) || 0,
+    azimuth: parseInt(panel.azimuth) || 180,
+    maxPanels: getMaxPanels(),
+    mountType: solarParams.mountType || "triangulos",
+    panelProjDepth: solarResults.panelProjectedDepth,
+    rowSpacing: solarResults.rowSpacing,
+  });
+
+  const sendToIframe = (cfg: ReturnType<typeof buildConfig>) => {
     if (iframeRef.current?.contentWindow) {
       iframeRef.current.contentWindow.postMessage(JSON.stringify({ type: "setConfig", ...cfg }), "*");
     }
   };
 
-  const handlePanelChange = (key: keyof typeof panel, rawValue: string) => {
-    const updated = { ...panel, [key]: rawValue };
+  // Send config whenever relevant values change
+  useEffect(() => {
+    sendToIframe(buildConfig());
+  }, [
+    panel.panelWidth, panel.panelHeight, panel.panelPower, panel.azimuth,
+    solarParams.mountType, solarResults.panelProjectedDepth, solarResults.rowSpacing,
+    panelMode, manualPanels,
+  ]);
+
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      try {
+        const data = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
+        if (data.type === "roofMeasured") setMapData(data);
+        else if (data.type === "roofCleared") setMapData(null);
+      } catch {}
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [setMapData]);
+
+  const handlePanelChange = (key: keyof typeof panel, val: string) => {
+    const updated = { ...panel, [key]: val };
     setPanel(updated);
-    sendToIframe({
-      panelW: parseFloat(updated.panelWidth) || 0,
-      panelH: parseFloat(updated.panelHeight) || 0,
-      powerWp: parseFloat(updated.panelPower) || 0,
-      azimuth: parseInt(updated.azimuth) || 0,
-      maxPanels,
-    });
+    sendToIframe({ ...buildConfig(), [key === "panelWidth" ? "panelW" : key === "panelHeight" ? "panelH" : key === "panelPower" ? "powerWp" : "azimuth"]: parseFloat(val) || 0 });
   };
 
-  const handleMaxPanels = (val: number) => {
-    setMaxPanels(val);
-    sendToIframe({
-      panelW: parseFloat(panel.panelWidth) || 0,
-      panelH: parseFloat(panel.panelHeight) || 0,
-      powerWp: parseFloat(panel.panelPower) || 0,
-      azimuth: parseInt(panel.azimuth) || 0,
-      maxPanels: val,
-    });
-  };
+  const isCoplanar = solarParams.mountType === "coplanar";
 
   return (
     <div className="flex h-full w-full">
+      {/* ── Sidebar ── */}
       <div className="w-80 bg-white border-r flex flex-col z-10 shadow-lg shrink-0">
         <div className="p-6 border-b bg-slate-50">
           <h2 className="text-xl font-bold text-[#0D2B45] tracking-tight">Mapeamento</h2>
           <p className="text-sm text-muted-foreground mt-1">Desenhe a área do telhado no mapa.</p>
         </div>
 
-        <div className="p-6 space-y-4 overflow-y-auto flex-1">
+        <div className="p-5 space-y-5 overflow-y-auto flex-1">
+
+          {/* Mount type info (read-only, set in Espaçamento) */}
+          <div className="flex items-center gap-2 bg-slate-50 rounded-lg border px-3 py-2">
+            <span className="text-lg">{isCoplanar ? "▬" : "▲"}</span>
+            <div>
+              <div className="text-xs font-semibold text-[#0D2B45]">
+                {isCoplanar ? "Telhado Coplanar" : "Estrutura Triângulos"}
+              </div>
+              {!isCoplanar && (
+                <div className="text-xs text-muted-foreground">
+                  d = {solarResults.rowSpacing.toFixed(3)} m · gap = {solarResults.gap.toFixed(3)} m
+                </div>
+              )}
+              {isCoplanar && (
+                <div className="text-xs text-muted-foreground">Sem cálculo de espaçamento</div>
+              )}
+            </div>
+            <span className="ml-auto text-[10px] text-muted-foreground italic">de Espaçamento</span>
+          </div>
+
+          {/* Panel dimensions */}
           <div className="space-y-3">
-            <Label className="text-[#0D2B45] font-semibold">Painel Solar</Label>
+            <Label className="text-[#0D2B45] font-semibold text-sm">Painel Solar</Label>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Largura (m)</Label>
@@ -417,34 +505,85 @@ export default function MapaPage() {
             </div>
           </div>
 
-          <div className="space-y-3 pt-4 border-t">
-            <Label className="text-[#0D2B45] font-semibold">Configuração</Label>
-            <div className="space-y-1">
-              <Label className="text-xs">Máx. Painéis (0 = auto)</Label>
-              <Input type="number" value={maxPanels} onChange={e => handleMaxPanels(parseInt(e.target.value) || 0)} className="h-8 text-sm" />
+          {/* Panel count mode */}
+          <div className="space-y-3 pt-1 border-t">
+            <Label className="text-[#0D2B45] font-semibold text-sm">Nº de Painéis</Label>
+
+            <div className="grid grid-cols-3 gap-0 rounded-lg border border-slate-200 overflow-hidden text-xs font-medium">
+              {(["auto", "calculator", "manual"] as PanelMode[]).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setPanelMode(mode)}
+                  className={`py-2 px-1 text-center border-r last:border-r-0 border-slate-200 transition-colors ${
+                    panelMode === mode
+                      ? "bg-[#0D2B45] text-white"
+                      : "bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {mode === "auto" ? "Auto" : mode === "calculator" ? "Calculadora" : "Manual"}
+                </button>
+              ))}
             </div>
+
+            {panelMode === "auto" && (
+              <p className="text-xs text-muted-foreground bg-slate-50 rounded px-2 py-1.5 border">
+                Preenche automaticamente a área desenhada.
+              </p>
+            )}
+            {panelMode === "calculator" && (
+              <div className="bg-[#EBF5FF] border-[#1E88E5] border rounded px-3 py-2 text-xs">
+                <div className="font-semibold text-[#0D2B45]">Da página Espaçamento:</div>
+                <div className="text-[#1E88E5] font-bold text-base mt-0.5">{calcPanels} painéis</div>
+                <div className="text-muted-foreground">{solarParams.rows} fileiras × {solarParams.cols} colunas</div>
+              </div>
+            )}
+            {panelMode === "manual" && (
+              <div className="space-y-1">
+                <Label className="text-xs">Limite máximo</Label>
+                <Input
+                  type="number"
+                  value={manualPanels}
+                  onChange={e => setManualPanels(e.target.value)}
+                  min="1"
+                  className="h-8 text-sm"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Azimuth */}
+          <div className="space-y-2 pt-1 border-t">
+            <Label className="text-[#0D2B45] font-semibold text-sm">Orientação</Label>
             <div className="space-y-1">
               <Label className="text-xs">Azimute (0=N, 180=S)</Label>
               <Input type="number" value={panel.azimuth} onChange={e => handlePanelChange("azimuth", e.target.value)} className="h-8 text-sm" />
             </div>
           </div>
 
+          {/* Results */}
           {mapData && (
-            <div className="pt-6 mt-2 border-t space-y-3 animate-in fade-in">
-              <Label className="text-[#0D2B45] font-semibold">Resultados</Label>
+            <div className="pt-4 border-t space-y-3 animate-in fade-in">
+              <Label className="text-[#0D2B45] font-semibold text-sm">Resultados</Label>
               <Card className="bg-[#F0F6FB] border-[#1E88E5]/20 shadow-sm">
-                <CardContent className="p-4 space-y-3">
+                <CardContent className="p-4 space-y-2.5">
                   <div className="flex justify-between items-center border-b border-[#1E88E5]/10 pb-2">
                     <span className="text-xs text-muted-foreground">Nº Painéis</span>
                     <span className="font-bold text-[#0D2B45] text-lg">{mapData.panelCount}</span>
                   </div>
                   <div className="flex justify-between items-center border-b border-[#1E88E5]/10 pb-2">
-                    <span className="text-xs text-muted-foreground">Área Total</span>
+                    <span className="text-xs text-muted-foreground">Área Telhado</span>
                     <span className="font-semibold text-[#0D2B45]">{mapData.roofArea} m²</span>
                   </div>
                   <div className="flex justify-between items-center border-b border-[#1E88E5]/10 pb-2">
                     <span className="text-xs text-muted-foreground">Potência</span>
                     <span className="font-bold text-[#1E88E5] text-lg">{mapData.totalKwp?.toFixed(2)} kWp</span>
+                  </div>
+                  <div className="flex justify-between items-center border-b border-[#1E88E5]/10 pb-2">
+                    <span className="text-xs text-muted-foreground">Tipo</span>
+                    <span className="font-semibold text-[#0D2B45] text-sm">
+                      {mapData.mountType === "coplanar" ? "Coplanar" : "Triângulos"}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-xs text-muted-foreground">Orientação</span>
@@ -456,11 +595,12 @@ export default function MapaPage() {
           )}
         </div>
       </div>
-      
+
+      {/* ── Map ── */}
       <div className="flex-1 h-full bg-[#E2E8F0] relative">
-        <iframe 
+        <iframe
           ref={iframeRef}
-          srcDoc={MAP_HTML} 
+          srcDoc={MAP_HTML}
           className="absolute inset-0 w-full h-full border-none"
           title="Satellite Map"
           sandbox="allow-scripts allow-same-origin"
