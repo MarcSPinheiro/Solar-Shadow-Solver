@@ -1,0 +1,138 @@
+import { useState } from "react";
+import { useSolar } from "@/contexts/SolarContext";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { buildCrossSectionSvg, buildLayoutSvg } from "@/lib/svg-utils";
+import { AlertTriangle, Info } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+export default function CalculatorPage() {
+  const { params, setParams, results } = useSolar();
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setParams(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  return (
+    <div className="p-8 max-w-7xl mx-auto space-y-6">
+      <div className="flex flex-col mb-8">
+        <h1 className="text-3xl font-bold text-[#0D2B45] tracking-tight">Espaçamento entre Painéis</h1>
+        <p className="text-muted-foreground">Cálculo de sombras e distância livre entre fileiras.</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="lg:col-span-4 space-y-6">
+          <Card className="border-[#1a3d5c]/10 shadow-md">
+            <CardHeader className="bg-slate-50 border-b">
+              <CardTitle className="text-lg text-[#0D2B45]">Parâmetros de Entrada</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="height">Altura (m)</Label>
+                  <Input type="number" id="height" name="height" value={params.height} onChange={handleChange} step="0.01" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="width">Largura (m)</Label>
+                  <Input type="number" id="width" name="width" value={params.width} onChange={handleChange} step="0.01" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="angle">Inclinação (°)</Label>
+                  <Input type="number" id="angle" name="angle" value={params.angle} onChange={handleChange} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="latitude">Latitude (°)</Label>
+                  <Input type="number" id="latitude" name="latitude" value={params.latitude} onChange={handleChange} step="0.1" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="rows">Nº Fileiras</Label>
+                  <Input type="number" id="rows" name="rows" value={params.rows} onChange={handleChange} min="1" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="cols">Nº Colunas</Label>
+                  <Input type="number" id="cols" name="cols" value={params.cols} onChange={handleChange} min="1" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Alert variant="default" className="bg-[#EBF5FF] border-[#1E88E5] text-[#0D2B45]">
+            <Info className="h-4 w-4 text-[#1E88E5]" />
+            <AlertTitle>Otimização 21 Dez</AlertTitle>
+            <AlertDescription className="text-sm">
+              O cálculo garante zero sombreamento no solstício de inverno (ângulo solar: {results.altitudeAngle.toFixed(1)}°).
+            </AlertDescription>
+          </Alert>
+        </div>
+
+        <div className="lg:col-span-8 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="border-[#1E88E5] shadow-md bg-[#F0F6FB]">
+              <CardContent className="pt-6">
+                <div className="text-sm text-muted-foreground font-medium">Distância Início→Início (d)</div>
+                <div className="text-4xl font-bold text-[#1E88E5] mt-1">{results.rowSpacing.toFixed(3)} m</div>
+              </CardContent>
+            </Card>
+            <Card className={results.gap < 0.5 ? "border-[#EF4444] bg-[#FEF2F2]" : "border-[#1a3d5c]/10"}>
+              <CardContent className="pt-6">
+                <div className="text-sm text-muted-foreground font-medium">Espaço livre (Gap)</div>
+                <div className={`text-4xl font-bold mt-1 ${results.gap < 0.5 ? "text-[#EF4444]" : "text-[#0D2B45]"}`}>
+                  {results.gap.toFixed(3)} m
+                </div>
+                {results.gap < 0.5 && (
+                  <div className="text-xs text-[#EF4444] mt-2 flex items-center gap-1">
+                    <AlertTriangle size={14} /> Espaço pode ser insuficiente para manutenção
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white p-4 rounded-lg border shadow-sm">
+              <div className="text-xs text-muted-foreground">Projeção Horizontal</div>
+              <div className="text-lg font-semibold text-[#0D2B45]">{results.panelProjectedDepth.toFixed(2)} m</div>
+            </div>
+            <div className="bg-white p-4 rounded-lg border shadow-sm">
+              <div className="text-xs text-muted-foreground">Comprimento N-S</div>
+              <div className="text-lg font-semibold text-[#0D2B45]">{results.totalLength.toFixed(2)} m</div>
+            </div>
+            <div className="bg-white p-4 rounded-lg border shadow-sm">
+              <div className="text-xs text-muted-foreground">Largura E-O</div>
+              <div className="text-lg font-semibold text-[#0D2B45]">{results.totalWidth.toFixed(2)} m</div>
+            </div>
+            <div className="bg-white p-4 rounded-lg border shadow-sm">
+              <div className="text-xs text-muted-foreground">Sombra (L)</div>
+              <div className="text-lg font-semibold text-[#0D2B45]">{results.shadowLength.toFixed(2)} m</div>
+            </div>
+          </div>
+
+          <Card className="shadow-sm">
+            <CardHeader className="py-4 border-b">
+              <CardTitle className="text-base text-[#0D2B45]">Perfil e Sombreamento</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 overflow-hidden flex justify-center bg-[#F8FAFC]">
+              <div className="w-full max-w-2xl" dangerouslySetInnerHTML={{ __html: buildCrossSectionSvg(results) }} />
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-sm">
+            <CardHeader className="py-4 border-b">
+              <CardTitle className="text-base text-[#0D2B45]">Disposição (Top-down)</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 overflow-hidden flex justify-center bg-[#F0F6FB]">
+              <div className="w-full max-w-md" dangerouslySetInnerHTML={{ __html: buildLayoutSvg(results, parseInt(params.rows) || 1, parseInt(params.cols) || 1) }} />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
