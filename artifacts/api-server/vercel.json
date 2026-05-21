@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "installCommand": "echo ok",
   "builds": [
     { "src": "api/geocode.js", "use": "@vercel/node" },
     { "src": "api/healthz.js", "use": "@vercel/node" }
