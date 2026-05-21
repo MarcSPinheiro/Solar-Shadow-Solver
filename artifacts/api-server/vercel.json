@@ -1,10 +1,12 @@
 {
   "version": 2,
-  "buildCommand": "echo ok",
-  "installCommand": "echo ok",
-  "rewrites": [
-    { "source": "/api/geocode", "destination": "/api/geocode" },
-    { "source": "/api/healthz", "destination": "/api/healthz" },
-    { "source": "/healthz",     "destination": "/api/healthz" }
+  "builds": [
+    { "src": "api/geocode.js", "use": "@vercel/node" },
+    { "src": "api/healthz.js", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/geocode", "dest": "/api/geocode.js" },
+    { "src": "/api/healthz", "dest": "/api/healthz.js" },
+    { "src": "/healthz",     "dest": "/api/healthz.js" }
   ]
 }
