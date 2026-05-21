@@ -1,7 +1,10 @@
 {
   "version": 2,
-  "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
+  "buildCommand": "echo 'no build needed'",
+  "installCommand": "echo 'no install needed'",
   "rewrites": [
-    { "source": "/(.*)", "destination": "/api/index" }
+    { "source": "/api/geocode", "destination": "/api/geocode" },
+    { "source": "/api/healthz", "destination": "/api/healthz" },
+    { "source": "/healthz",     "destination": "/api/healthz" }
   ]
 }
