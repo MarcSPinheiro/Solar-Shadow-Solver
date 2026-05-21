@@ -1,0 +1,7 @@
+src/
+lib/
+node_modules/
+dist/
+build.mjs
+tsconfig.json
+*.md
