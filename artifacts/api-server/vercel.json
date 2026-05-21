@@ -1,7 +1,11 @@
 {
   "version": 2,
-  "buildCommand": "echo 'no build needed'",
-  "installCommand": "echo 'no install needed'",
+  "buildCommand": "echo ok",
+  "installCommand": "echo ok",
+  "functions": {
+    "api/geocode.js": { "runtime": "@vercel/node@5" },
+    "api/healthz.js": { "runtime": "@vercel/node@5" }
+  },
   "rewrites": [
     { "source": "/api/geocode", "destination": "/api/geocode" },
     { "source": "/api/healthz", "destination": "/api/healthz" },
